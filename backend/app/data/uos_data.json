@@ -1,0 +1,182 @@
+{
+  "university_name": "University of Swat",
+  "established": "2001",
+  "type": "Public Research University",
+  "chancellor": "Governor of Khyber Pakhtunkhwa",
+  "vice_chancellor": "Prof. Dr. Jehanzeb Khan",
+  "location": "Charbagh, Swat, Khyber Pakhtunkhwa, Pakistan",
+  "address": "University Road, Charbagh, Swat, KPK, Pakistan",
+  "website": "https://www.uswat.edu.pk",
+  "email": "info@uswat.edu.pk",
+  "phone": "+92-946-9240066",
+  "fax": "+92-946-9240011",
+  "contact": "info@uswat.edu.pk, +92-946-9240066",
+
+  "about": "The University of Swat (UoS) is a public research university located in Charbagh, Swat, Khyber Pakhtunkhwa, Pakistan. Established in 2001, the university strives to provide quality higher education to the people of Swat and surrounding regions. It offers a wide range of undergraduate, postgraduate, and doctoral programs across disciplines including Computer Science, Management Sciences, Pharmacy, Natural Sciences, Humanities, and Social Sciences.",
+
+  "vision": "To become a world-class institution of higher learning contributing to knowledge, innovation, and sustainable development.",
+  "mission": "To provide quality education, promote research, and cultivate ethical leadership for serving society.",
+
+  "campus": {
+    "total_area": "Over 350 Acres",
+    "facilities": ["Central Library", "Sports Complex", "Student Hostels (Boys & Girls)", "Cafeteria", "Medical Dispensary", "Transport Facility", "Mosque", "IT Labs", "Science Labs", "Auditorium", "Guest House"]
+  },
+
+  "departments": [
+    "Computer Science and Information Technology",
+    "Management Sciences",
+    "English",
+    "Pharmacy",
+    "Physics",
+    "Chemistry",
+    "Mathematics",
+    "Botany",
+    "Zoology",
+    "Psychology",
+    "Education",
+    "Islamic Studies",
+    "Pashto",
+    "Law"
+  ],
+
+  "programs": [
+    {
+      "id": 1,
+      "name": "BS Computer Science",
+      "department": "Computer Science and Information Technology",
+      "duration": "4 Years",
+      "semesters": 8,
+      "eligibility": "FSc (Pre-Engineering or Pre-Medical or ICS) with minimum 50% marks or equivalent",
+      "description": "A comprehensive program covering software development, algorithms, artificial intelligence, data structures, databases, networking, and systems. Prepares graduates for software engineering, data science, and tech industry roles."
+    },
+    {
+      "id": 2,
+      "name": "BS Software Engineering",
+      "department": "Computer Science and Information Technology",
+      "duration": "4 Years",
+      "semesters": 8,
+      "eligibility": "FSc with minimum 50% marks or ICS",
+      "description": "Focuses on engineering principles applied to software development, including project management, software quality assurance, agile methodologies, and system design."
+    },
+    {
+      "id": 3,
+      "name": "MS Computer Science",
+      "department": "Computer Science and Information Technology",
+      "duration": "2 Years",
+      "semesters": 4,
+      "eligibility": "BS CS or equivalent with minimum CGPA 2.5",
+      "description": "Advanced studies in computing, research methodology, and specialized areas like machine learning, cloud computing, and cybersecurity."
+    },
+    {
+      "id": 4,
+      "name": "BBA (Bachelor of Business Administration)",
+      "department": "Management Sciences",
+      "duration": "4 Years",
+      "semesters": 8,
+      "eligibility": "FA/FSc with minimum 45% marks",
+      "description": "Prepares students for leadership roles in business and management, covering marketing, finance, HR, entrepreneurship, and organizational behaviour."
+    },
+    {
+      "id": 5,
+      "name": "MBA (Master of Business Administration)",
+      "department": "Management Sciences",
+      "duration": "2 Years",
+      "semesters": 4,
+      "eligibility": "BBA or 16-year education with minimum 45% marks",
+      "description": "Advanced management studies with specializations in finance, marketing, and human resource management."
+    },
+    {
+      "id": 6,
+      "name": "BS English",
+      "department": "English",
+      "duration": "4 Years",
+      "semesters": 8,
+      "eligibility": "FA/FSc with minimum 45% marks",
+      "description": "A literature and linguistics program developing language skills, critical thinking, and cultural understanding for careers in education, media, and corporate sectors."
+    },
+    {
+      "id": 7,
+      "name": "BS Pharmacy (Pharm-D)",
+      "department": "Pharmacy",
+      "duration": "5 Years",
+      "semesters": 10,
+      "eligibility": "FSc (Pre-Medical) with minimum 60% marks",
+      "description": "A professional pharmacy degree preparing students for careers as pharmacists in clinical, industrial, and community settings."
+    },
+    {
+      "id": 8,
+      "name": "BS Mathematics",
+      "department": "Mathematics",
+      "duration": "4 Years",
+      "semesters": 8,
+      "eligibility": "FSc (Pre-Engineering or Pre-Medical) with minimum 50% marks",
+      "description": "Covers pure and applied mathematics, statistics, and mathematical modelling for careers in academia, finance, and research."
+    },
+    {
+      "id": 9,
+      "name": "BS Physics",
+      "department": "Physics",
+      "duration": "4 Years",
+      "semesters": 8,
+      "eligibility": "FSc (Pre-Engineering or Pre-Medical) with minimum 50% marks",
+      "description": "Theoretical and experimental physics program covering classical mechanics, quantum physics, thermodynamics, and electromagnetism."
+    },
+    {
+      "id": 10,
+      "name": "BS Chemistry",
+      "department": "Chemistry",
+      "duration": "4 Years",
+      "semesters": 8,
+      "eligibility": "FSc (Pre-Medical or Pre-Engineering) with minimum 50% marks",
+      "description": "Covers organic, inorganic, physical, and analytical chemistry. Excellent preparation for pharmaceutical, industrial, and research careers."
+    }
+  ],
+
+  "admissions": {
+    "status": "Open",
+    "start_date": "August 1, 2026",
+    "end_date": "September 15, 2026",
+    "entry_test_date": "September 20, 2026",
+    "merit_list_date": "September 28, 2026",
+    "process": "1. Check eligibility for your desired program. 2. Fill the online application form at admissions.uswat.edu.pk. 3. Pay the application processing fee (Rs. 1000) via bank challan. 4. Submit the printed form with attested documents (Matric certificate, FSc/FA certificate, CNIC/B-Form copy, 4 passport photos) to the Admissions Office. 5. Appear in the University Entry Test. 6. Check the merit list and report for enrollment.",
+    "required_documents": ["Matric Certificate and Marksheet", "FSc/FA Certificate and Marksheet", "CNIC or B-Form (attested copy)", "4 Passport-size photographs", "Bank fee challan", "Domicile Certificate", "Character Certificate from last institution"]
+  },
+
+  "fees": {
+    "application_fee": "Rs. 1,000",
+    "BS": "Rs. 45,000 per semester",
+    "MS": "Rs. 55,000 per semester",
+    "PhD": "Rs. 65,000 per semester",
+    "Pharm_D": "Rs. 60,000 per semester",
+    "hostel": "Rs. 15,000 - Rs. 25,000 per semester",
+    "note": "Fee structure is subject to change. Scholarships and financial aid are available for deserving students."
+  },
+
+  "scholarships": [
+    "HEC Need-Based Scholarships",
+    "Prime Minister's Laptop Scheme",
+    "KPK Government Merit Scholarships",
+    "University Merit Scholarships for top students",
+    "Ehsaas Undergraduate Scholarship Program"
+  ],
+
+  "research": {
+    "journals": ["UoS Journal of Natural Sciences", "UoS Management Review"],
+    "centers": ["Centre for Biotechnology and Microbiology", "Centre for Peace and Development Studies"]
+  },
+
+  "notable_facts": [
+    "University of Swat is one of the fastest-growing public universities in KPK.",
+    "The university is HEC recognized and ranked.",
+    "It has produced thousands of graduates serving in government, corporate, and academic sectors.",
+    "The campus is spread over 350+ acres in the scenic Swat Valley.",
+    "The university offers free Wi-Fi across the campus.",
+    "A dedicated transport service is available for students from Mingora and surrounding areas."
+  ],
+  "social_media": {
+    "facebook": "https://www.facebook.com/universityofswat/",
+    "twitter": "https://x.com/UniversitySwat",
+    "linkedin": "https://www.linkedin.com/company/university-of-swat1/",
+    "tiktok": "https://www.tiktok.com/@universityofswat2010"
+  }
+}

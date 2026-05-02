@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+pydantic
+pydantic-settings
+langchain
+langchain-groq
+langchain-community
+langchain-text-splitters
+pinecone
+tiktoken
+python-dotenv
+beautifulsoup4
+requests
+python-docx
