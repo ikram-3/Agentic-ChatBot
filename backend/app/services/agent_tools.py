@@ -13,13 +13,13 @@ from langchain_core.tools import Tool
 
 
 @tool
-def fast_scrape_university_news() -> str:
+async def fast_scrape_university_news() -> str:
     """
     Use this tool FIRST when you need to know the latest news, announcements, or events 
     from the University of Swat website. It is very fast but only grabs headlines.
     """
     from app.services.scraper import get_live_context
-    result = get_live_context()
+    result = await get_live_context()
     if not result:
         return "No recent news found on the website."
     return result
@@ -55,14 +55,14 @@ async def deep_scrape_with_playwright(url: str) -> str:
         return f"Failed to deep scrape {url}. Error: {str(e)}"
 
 @tool
-def search_wikipedia_topic(query: str) -> str:
+async def search_wikipedia_topic(query: str) -> str:
     """
     Search Wikipedia for a specific topic when you need general knowledge 
     about Swat, history, geography, or academic terms not found in the 
     university's local database.
     """
     from app.services.wikipedia_service import fetch_summary
-    result = fetch_summary(query)
+    result = await fetch_summary(query)
     if not result or not result.get("extract"):
         return f"No Wikipedia entry found for '{query}'."
     return f"Title: {result['title']}\nSummary: {result['extract']}\nSource: {result['url']}"
@@ -73,12 +73,16 @@ def get_all_tools(llm):
     # 1. Fast Scraper
     fast_scraper = fast_scrape_university_news
     deep_scraper = deep_scrape_with_playwright
-    api_wrapper = WikipediaAPIWrapper(top_k_results=1, doc_content_chars_max=1500)
-    wiki_tool = WikipediaQueryRun(api_wrapper=api_wrapper)
+    
+    # 2. Custom Wikipedia Search
+    wiki_tool = search_wikipedia_topic
+    
+    # 3. Math Tool
     math_chain = LLMMathChain.from_llm(llm=llm)
     math_tool = Tool(
         name="Calculator",
         func=math_chain.run,
+        coroutine=math_chain.arun,
         description="Useful for when you need to answer questions about math or calculations."
     )
     
