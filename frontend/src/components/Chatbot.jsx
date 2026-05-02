@@ -19,7 +19,7 @@ SyntaxHighlighter.registerLanguage('python', python);
 SyntaxHighlighter.registerLanguage('js', js);
 SyntaxHighlighter.registerLanguage('py', python);
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = '/api';
 
 /* ── Constants & Helpers ── */
 const WIDGET_TOKEN_RE = /(?:\[\s*)?WIDGET:([^\s\]]+(?:\s+[^\s\]]+)*)(?:\s*\])?/gi;
