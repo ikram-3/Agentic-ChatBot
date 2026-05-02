@@ -13,6 +13,7 @@ from typing import Optional, List, Dict
 class ChatRequest(BaseModel):
     message: str
     history: Optional[List[Dict[str, str]]] = []
+    thinking_enabled: Optional[bool] = True
 
 class ChatResponse(BaseModel):
     reply: str
@@ -48,14 +49,25 @@ async def chat_endpoint(request: ChatRequest):
 
 @router.post("/chat/stream")
 async def chat_stream_endpoint(request: ChatRequest):
-    """Streaming endpoint – sends tokens as they arrive."""
+    """
+    Streaming endpoint — sends typed SSE events as they arrive.
+
+    Event types:
+      {"type": "thinking",   "content": "..."}   ← Model 1 planner analysis
+      {"type": "tool_start", "tool": "...", "label": "...", "icon": "..."} ← tool begins
+      {"type": "tool_end",   "tool": "..."}       ← tool finished
+      {"type": "token",      "token": "..."}       ← final answer chunk
+      {"type": "error",      "message": "..."}     ← error
+    """
     async def event_generator():
         try:
-            async for chunk in query_rag_stream(request.message, request.history):
-                data = json.dumps({"token": chunk})
-                yield f"data: {data}\n\n"
+            async for event in query_rag_stream(request.message, request.history, thinking_enabled=request.thinking_enabled):
+                yield f"data: {json.dumps(event)}\n\n"
+        except asyncio.CancelledError:
+            # Client disconnected / aborted — stop cleanly
+            return
         except Exception as e:
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
         finally:
             yield "data: [DONE]\n\n"
 
@@ -83,9 +95,6 @@ async def get_fees():
     data = load_data()
     return data.get("fees", {})
 
-# ─────────────────────────────────────────────
-# Verification Endpoints
-# ─────────────────────────────────────────────
 
 @router.get("/verify/bank-slip/{reference_no}")
 async def verify_bank_slip(reference_no: str):

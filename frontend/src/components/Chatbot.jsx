@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   ArrowUp, Square, GraduationCap, Sparkles,
   BookOpen, ClipboardList, MapPin, ShieldCheck,
-  Sun, Moon
+  Sun, Moon, Brain, ChevronDown, ChevronUp,
+  Globe, BookMarked, Calculator, Layers
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import SyntaxHighlighter from 'react-syntax-highlighter/dist/esm/light';
@@ -46,22 +47,29 @@ const getFriendlyLabel = (url) => {
   } catch { return url; }
 };
 
-/* ── Modern Markdown Renderer with Syntax Highlighting ── */
-const MarkdownRenderer = ({ text }) => {
-  // Strip any widget tokens that slipped through (double safety)
-  const safeText = (text || '').replace(WIDGET_TOKEN_RE, '').trim();
+/* ── Tool Icon Map ── */
+const TOOL_ICONS = {
+  'fast_scrape_university_news': <Globe size={13} />,
+  'deep_scrape_with_playwright': <Layers size={13} />,
+  'search_wikipedia_topic':      <BookMarked size={13} />,
+  'WikipediaQueryRun':           <BookMarked size={13} />,
+  'Calculator':                  <Calculator size={13} />,
+};
 
+const getToolIcon = (toolName) => TOOL_ICONS[toolName] || <Sparkles size={13} />;
+
+/* ── Markdown Renderer ── */
+const MarkdownRenderer = ({ text }) => {
+  const safeText = (text || '').replace(WIDGET_TOKEN_RE, '').trim();
   return (
     <div className="markdown-body">
       <ReactMarkdown
         components={{
-          // Custom link renderer with friendly labels
           a: ({ href, children }) => (
             <a href={href} target="_blank" rel="noreferrer" className="inline-link">
               {getFriendlyLabel(href) || children}
             </a>
           ),
-          // Syntax highlighting for code blocks
           code: ({ node, inline, className, children, ...props }) => {
             const match = /language-(\w+)/.exec(className || '');
             return !inline && match ? (
@@ -74,9 +82,7 @@ const MarkdownRenderer = ({ text }) => {
                 {String(children).replace(/\n$/, '')}
               </SyntaxHighlighter>
             ) : (
-              <code className={className} {...props}>
-                {children}
-              </code>
+              <code className={className} {...props}>{children}</code>
             );
           }
         }}
@@ -87,7 +93,68 @@ const MarkdownRenderer = ({ text }) => {
   );
 };
 
-/* ── Bot message renderer — stable component (no IIFE) ── */
+/* ── Thinking Panel ── */
+const ThinkingPanel = ({ content, isStreaming }) => {
+  const [expanded, setExpanded] = useState(true);
+
+  // Auto-expand while streaming, keep user preference after
+  useEffect(() => {
+    if (isStreaming) setExpanded(true);
+  }, [isStreaming]);
+
+  if (!content && !isStreaming) return null;
+
+  return (
+    <div className="thinking-panel">
+      <button
+        className="thinking-summary"
+        onClick={() => setExpanded(e => !e)}
+        aria-expanded={expanded}
+      >
+        <span className="thinking-icon-wrap">
+          <Brain size={13} />
+        </span>
+        <span className="thinking-label">
+          {isStreaming ? 'Thinking…' : 'Thought process'}
+        </span>
+        {isStreaming && <span className="thinking-pulse" />}
+        <span className="thinking-chevron">
+          {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+        </span>
+      </button>
+
+      {expanded && (
+        <div className="thinking-body">
+          <div className="thinking-md">
+            <MarkdownRenderer text={content} />
+          </div>
+          {isStreaming && <span className="think-cursor-block" />}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ── Tool Orchestration Status Bar ── */
+const ToolStatusBar = ({ tools }) => {
+  if (!tools || tools.length === 0) return null;
+
+  return (
+    <div className="tool-status-bar">
+      {tools.map((t, i) => (
+        <span key={i} className="tool-chip">
+          <span className="tool-chip-icon">{getToolIcon(t.tool)}</span>
+          <span className="tool-chip-label">{t.icon} {t.label}</span>
+          <span className="tool-chip-dots">
+            <span /><span /><span />
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+};
+
+/* ── Bot Message ── */
 const BotMessage = ({ msg }) => {
   let cleanText = msg.text || '';
   let widgets = [];
@@ -96,16 +163,32 @@ const BotMessage = ({ msg }) => {
     cleanText = parsed.cleanText;
     widgets = parsed.widgets || [];
   } catch (e) {
-    // fallback: strip manually
     cleanText = (msg.text || '').replace(WIDGET_TOKEN_RE, '').trim();
   }
 
+  const hasThinking = !!(msg.thinking);
+  const hasTools = msg.activeTools && msg.activeTools.length > 0;
+  const showTypingDots = msg.streaming && !msg.text && !hasThinking;
+
   return (
     <div className={`bot-bubble ${msg.isError ? 'error' : ''}`}>
-      {cleanText ? <MarkdownRenderer text={cleanText} /> : null}
-      {msg.streaming && !msg.text && (
+      {/* Thinking Panel */}
+      {hasThinking && (
+        <ThinkingPanel content={msg.thinking} isStreaming={msg.streaming && !msg.text} />
+      )}
+
+      {/* Tool Orchestration Bar */}
+      {hasTools && <ToolStatusBar tools={msg.activeTools} />}
+
+      {/* Typing dots — only before any content arrives */}
+      {showTypingDots && (
         <div className="typing-dots"><span /><span /><span /></div>
       )}
+
+      {/* Answer text */}
+      {cleanText ? <MarkdownRenderer text={cleanText} /> : null}
+
+      {/* Widgets (after streaming ends) */}
       {!msg.streaming && widgets.map((w, i) => (
         <WidgetRenderer key={i} type={w.type} params={w.params} />
       ))}
@@ -129,13 +212,18 @@ const Chatbot = () => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
+  const [thinkingEnabled, setThinkingEnabled] = useState(true);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
   const abortRef = useRef(null);
-  // Typewriter queue: buffer incoming chars and drain at a steady pace
+
+  // Answer typewriter queue
   const charQueueRef = useRef([]);
   const drainerRef = useRef(null);
   const activeBotIdRef = useRef(null);
+  // Thinking typewriter queue
+  const thinkQueueRef = useRef([]);
+  const thinkDrainerRef = useRef(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -149,8 +237,7 @@ const Chatbot = () => {
   }, [input]);
 
   const startDrainer = useCallback((botId) => {
-    if (drainerRef.current) return; // already running
-    // Drain ~5 characters every 18ms → ~280 chars/sec, smooth typewriter feel
+    if (drainerRef.current) return;
     drainerRef.current = setInterval(() => {
       const queue = charQueueRef.current;
       if (queue.length === 0) return;
@@ -168,6 +255,25 @@ const Chatbot = () => {
     }
   }, []);
 
+  const startThinkDrainer = useCallback((botId) => {
+    if (thinkDrainerRef.current) return;
+    thinkDrainerRef.current = setInterval(() => {
+      const q = thinkQueueRef.current;
+      if (q.length === 0) return;
+      const chunk = q.splice(0, 4).join('');
+      setMessages(prev => prev.map(m =>
+        m.id === botId ? { ...m, thinking: (m.thinking || '') + chunk } : m
+      ));
+    }, 16);
+  }, []);
+
+  const stopThinkDrainer = useCallback(() => {
+    if (thinkDrainerRef.current) {
+      clearInterval(thinkDrainerRef.current);
+      thinkDrainerRef.current = null;
+    }
+  }, []);
+
   const sendMessage = useCallback(async (text) => {
     if (!text.trim() || isStreaming) return;
 
@@ -175,18 +281,30 @@ const Chatbot = () => {
     const botId = ++msgId;
     activeBotIdRef.current = botId;
     charQueueRef.current = [];
+    thinkQueueRef.current = [];
     stopDrainer();
+    stopThinkDrainer();
 
-    setMessages(prev => [...prev, userMsg, { id: botId, text: '', isBot: true, streaming: true }]);
+    setMessages(prev => [
+      ...prev,
+      userMsg,
+      {
+        id: botId,
+        text: '',
+        thinking: '',
+        activeTools: [],
+        isBot: true,
+        streaming: true,
+      }
+    ]);
     setInput('');
     setIsStreaming(true);
-    startDrainer(botId);
+    startThinkDrainer(botId);
 
     try {
       const controller = new AbortController();
       abortRef.current = controller;
 
-      // Format chat history (last 10 messages)
       const history = messages.slice(-10).map(m => ({
         role: m.isBot ? 'assistant' : 'user',
         content: m.text
@@ -195,7 +313,7 @@ const Chatbot = () => {
       const res = await fetch(`${API_BASE}/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text.trim(), history }),
+        body: JSON.stringify({ message: text.trim(), history, thinking_enabled: thinkingEnabled }),
         signal: controller.signal,
       });
 
@@ -204,6 +322,7 @@ const Chatbot = () => {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let thinkingReceived = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -216,17 +335,93 @@ const Chatbot = () => {
           if (!line.startsWith('data: ')) continue;
           const raw = line.slice(6).trim();
           if (raw === '[DONE]') break;
+
           try {
-            const parsed = JSON.parse(raw);
-            if (parsed.token) {
-              // Push each character into the queue
-              charQueueRef.current.push(...parsed.token.split(''));
+            const event = JSON.parse(raw);
+
+            switch (event.type) {
+              // ── Thinking token: typewriter for Model 1 ──────────────────
+              case 'thinking_token':
+                thinkingReceived = true;
+                if (event.token) {
+                  thinkQueueRef.current.push(...event.token.split(''));
+                }
+                break;
+
+              // ── Legacy full thinking event (fallback) ───────────────────
+              case 'thinking':
+                thinkingReceived = true;
+                if (event.content) {
+                  thinkQueueRef.current.push(...event.content.split(''));
+                }
+                break;
+
+              // ── Tool started ─────────────────────────────────────────────
+              case 'tool_start':
+                setMessages(prev => prev.map(m => {
+                  if (m.id !== botId) return m;
+                  const existing = m.activeTools || [];
+                  const alreadyExists = existing.some(t => t.tool === event.tool);
+                  if (alreadyExists) return m;
+                  return {
+                    ...m,
+                    activeTools: [...existing, {
+                      tool: event.tool,
+                      label: event.label,
+                      icon: event.icon,
+                    }]
+                  };
+                }));
+                break;
+
+              // ── Tool ended ───────────────────────────────────────────────
+              case 'tool_end':
+                setMessages(prev => prev.map(m =>
+                  m.id === botId
+                    ? { ...m, activeTools: (m.activeTools || []).filter(t => t.tool !== event.tool) }
+                    : m
+                ));
+                break;
+
+              // ── Token: final answer streaming ────────────────────────────
+              case 'token':
+                if (event.token) {
+                  if (!thinkingReceived) {
+                    // If no thinking yet, start drainer immediately
+                    startDrainer(botId);
+                  } else if (!drainerRef.current) {
+                    startDrainer(botId);
+                  }
+                  charQueueRef.current.push(...event.token.split(''));
+                }
+                break;
+
+              // ── Error ────────────────────────────────────────────────────
+              case 'error':
+                stopDrainer();
+                charQueueRef.current = [];
+                setMessages(prev => prev.map(m =>
+                  m.id === botId
+                    ? { ...m, text: event.message || 'An error occurred.', isError: true }
+                    : m
+                ));
+                break;
+
+              // ── Legacy format fallback ───────────────────────────────────
+              default:
+                if (event.token) {
+                  if (!drainerRef.current) startDrainer(botId);
+                  charQueueRef.current.push(...event.token.split(''));
+                }
+                break;
             }
-          } catch {}
+          } catch {
+            // Malformed JSON — skip
+          }
         }
       }
 
-      // Wait for the queue to drain before marking done
+      // Wait for char queue to drain
       await new Promise(resolve => {
         const check = setInterval(() => {
           if (charQueueRef.current.length === 0) {
@@ -238,23 +433,49 @@ const Chatbot = () => {
 
     } catch (err) {
       stopDrainer();
+      stopThinkDrainer();
       charQueueRef.current = [];
+      thinkQueueRef.current = [];
       if (err.name !== 'AbortError') {
         setMessages(prev => prev.map(m =>
-          m.id === botId ? { ...m, text: 'Sorry, I could not reach the server. Make sure the backend is running.', isError: true } : m
+          m.id === botId
+            ? { ...m, text: 'Sorry, I could not reach the server. Make sure the backend is running.', isError: true }
+            : m
         ));
       }
     } finally {
       stopDrainer();
+      stopThinkDrainer();
       charQueueRef.current = [];
-      setMessages(prev => prev.map(m => m.id === botId ? { ...m, streaming: false } : m));
+      thinkQueueRef.current = [];
+      setMessages(prev => prev.map(m =>
+        m.id === botId ? { ...m, streaming: false, activeTools: [] } : m
+      ));
       setIsStreaming(false);
       abortRef.current = null;
     }
-  }, [isStreaming, startDrainer, stopDrainer]);
+  }, [isStreaming, messages, startDrainer, stopDrainer, startThinkDrainer, stopThinkDrainer]);
 
-  const stopStreaming = () => abortRef.current?.abort();
-  const handleKeyDown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input); } };
+  const stopStreaming = () => {
+    if (abortRef.current) abortRef.current.abort();
+    stopDrainer();
+    stopThinkDrainer();
+    charQueueRef.current = [];
+    thinkQueueRef.current = [];
+    setMessages(prev => prev.map(m =>
+      m.streaming ? { ...m, streaming: false, activeTools: [] } : m
+    ));
+    setIsStreaming(false);
+    abortRef.current = null;
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage(input);
+    }
+  };
+
   const canSend = input.trim().length > 0 && !isStreaming;
 
   return (
@@ -265,12 +486,22 @@ const Chatbot = () => {
           <div className="brand-logo"><GraduationCap size={20} /></div>
           <div>
             <div className="brand-name">UoS AI Assistant</div>
-            <div className="brand-sub">University of Swat</div>
+            <div className="brand-sub">University of Swat · Powered by Dual-Model AI</div>
           </div>
         </div>
-        <button className="theme-btn" onClick={toggleTheme} title="Toggle theme">
-          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-        </button>
+        <div className="header-actions">
+          <button
+            className={`think-toggle-btn ${thinkingEnabled ? 'active' : ''}`}
+            onClick={() => setThinkingEnabled(v => !v)}
+            title={thinkingEnabled ? 'Thinking ON — click to disable' : 'Thinking OFF — click to enable'}
+          >
+            <Brain size={15} />
+            <span className="think-toggle-label">{thinkingEnabled ? 'Thinking ON' : 'Thinking OFF'}</span>
+          </button>
+          <button className="theme-btn" onClick={toggleTheme} title="Toggle theme">
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+        </div>
       </header>
 
       {/* ── Messages ── */}
@@ -322,7 +553,7 @@ const Chatbot = () => {
           />
           <div className="input-actions">
             {isStreaming ? (
-              <button className="action-btn stop-btn" onClick={stopStreaming}>
+              <button className="action-btn stop-btn" onClick={stopStreaming} title="Stop generating">
                 <Square size={15} fill="currentColor" />
               </button>
             ) : (

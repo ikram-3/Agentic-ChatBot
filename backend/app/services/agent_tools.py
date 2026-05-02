@@ -40,7 +40,6 @@ async def deep_scrape_with_playwright(url: str) -> str:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
-            # Wait until network is mostly idle to ensure JS framework has loaded
             await page.goto(url, wait_until="networkidle", timeout=15000)
             
             # Extract main text content, excluding nav/footer clutter if possible
