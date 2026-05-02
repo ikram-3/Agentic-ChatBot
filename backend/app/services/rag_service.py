@@ -405,29 +405,39 @@ async def stream_planner(query: str, context: str):
         print(f"[Planner] Stream error: {e}")
 
 
-def _build_enriched_context(query: str, pinecone_docs: str) -> str:
-    """Combine Pinecone docs + live scraper + Wikipedia into one context string."""
-    parts = [pinecone_docs]
-    try:
-        live = get_live_context()
-        if live:
-            parts.append(live)
-    except Exception:
-        pass
-    try:
-        wiki = get_wiki_context(query)
-        if wiki:
-            parts.append("\n--- Wikipedia Context (Live) ---\n" + wiki)
-    except Exception:
-        pass
+async def fetch_all_context(query: str, pinecone_text: str) -> str:
+    """Fetch all context sources (Wikipedia, Live Scraper) in parallel."""
+    parts = [pinecone_text]
+    
+    # Run Wikipedia and Scraper in parallel
+    results = await asyncio.gather(
+        get_wiki_context(query),
+        get_live_context(),
+        return_exceptions=True
+    )
+    
+    wiki_res = results[0] if not isinstance(results[0], Exception) else ""
+    live_res = results[1] if not isinstance(results[1], Exception) else ""
+    
+    if live_res:
+        parts.append(live_res)
+    if wiki_res:
+        parts.append("\n--- Wikipedia Context (Live) ---\n" + wiki_res)
+        
     return "\n\n".join(filter(None, parts))
 
 
-def query_rag(query: str) -> str:
+async def query_rag(query: str) -> str:
     if not settings.GROQ_API_KEY or not settings.PINECONE_API_KEY or qa_chain is None:
         return f"Mock response to: {query} (Please set GROQ_API_KEY and PINECONE_API_KEY in .env to enable AI)"
     try:
-        return qa_chain.invoke(query)
+        # For the sync version, we still need to await the context fetching
+        pinecone_docs_list = retriever_global.invoke(query)
+        pinecone_text = "\n\n".join(d.page_content for d in pinecone_docs_list)
+        full_context = await fetch_all_context(query, pinecone_text)
+        
+        # We need a custom prompt injection here since qa_chain is pre-built
+        return await qa_chain.ainvoke({"context": full_context, "question": query})
     except Exception as e:
         return f"Error processing query: {str(e)}"
 
@@ -490,8 +500,11 @@ async def query_rag_stream(query: str, history: list = None, thinking_enabled: b
         pinecone_docs_list = retriever_global.invoke(query)
         pinecone_text = "\n\n".join(d.page_content for d in pinecone_docs_list)
 
-        # ── Step 2: Model 1 — Planner (only when enabled AND query is complex) ─
-        planner_context = pinecone_text[:1200]
+        # ── Step 2: Fetch additional context in parallel (Wiki + Live) ────────
+        full_context = await fetch_all_context(query, pinecone_text)
+
+        # ── Step 3: Model 1 — Planner (only when enabled AND query is complex) ─
+        planner_context = full_context[:1500]
         thinking_content = ""
         should_think = thinking_enabled and is_complex_query(query)
         if should_think:
@@ -499,11 +512,10 @@ async def query_rag_stream(query: str, history: list = None, thinking_enabled: b
                 thinking_content += evt.get("token", "")
                 yield evt
 
-            
-        enriched_context = pinecone_text
+        enriched_context = full_context
         if thinking_content:
             enriched_context = (
-                pinecone_text +
+                full_context +
                 "\n\n--- Planner Analysis ---\n" +
                 thinking_content
             )

@@ -2,29 +2,28 @@
 Live web scraper for University of Swat website.
 Fetches news, events, and notices from the official site.
 Results are cached in memory for 30 minutes.
+Converted to ASYNC to prevent blocking the event loop.
 """
 import time
-import json
-import requests
+import httpx
 from bs4 import BeautifulSoup
 
 _cache = {"data": None, "ts": 0}
 CACHE_TTL = 1800  # 30 minutes
 BASE_URL = "https://www.uswat.edu.pk"
 
-
-def _get(url: str, timeout: int = 8) -> BeautifulSoup | None:
+async def _get(url: str, timeout: int = 6) -> BeautifulSoup | None:
     try:
-        resp = requests.get(url, timeout=timeout, headers={
-            "User-Agent": "Mozilla/5.0 (compatible; UoS-Assistant/1.0)"
-        })
-        resp.raise_for_status()
-        return BeautifulSoup(resp.text, "html.parser")
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            resp = await client.get(url, timeout=timeout, headers={
+                "User-Agent": "Mozilla/5.0 (compatible; UoS-Assistant/1.0)"
+            })
+            resp.raise_for_status()
+            return BeautifulSoup(resp.text, "html.parser")
     except Exception:
         return None
 
-
-def scrape_uos() -> dict:
+async def scrape_uos() -> dict:
     """Return a dict with news, events, notices scraped from UoS website."""
     now = time.time()
     if _cache["data"] and (now - _cache["ts"]) < CACHE_TTL:
@@ -32,9 +31,9 @@ def scrape_uos() -> dict:
 
     result = {"news": [], "notices": [], "events": [], "scraped_at": ""}
 
-    soup = _get(BASE_URL)
+    soup = await _get(BASE_URL)
     if soup:
-        # Try to pull news/announcement items (generic selectors that work on most university sites)
+        # Try to pull news/announcement items
         for tag in soup.select("article, .news-item, .announcement, .post, .entry"):
             title_el = tag.find(["h2", "h3", "h4", "a"])
             if not title_el:
@@ -50,18 +49,16 @@ def scrape_uos() -> dict:
                 result["news"].append({"title": title[:150], "link": link, "date": date})
 
     result["scraped_at"] = time.strftime("%Y-%m-%d %H:%M")
-    # Limit results
     result["news"] = result["news"][:8]
 
     _cache["data"] = result
     _cache["ts"] = now
     return result
 
-
-def get_live_context() -> str:
+async def get_live_context() -> str:
     """Return a formatted string suitable for injection into the LLM context."""
     try:
-        data = scrape_uos()
+        data = await scrape_uos()
         if not data["news"]:
             return ""
         lines = ["## Live News & Announcements from uswat.edu.pk"]
