@@ -1,3 +1,12 @@
+---
+title: Agentic ChatBot
+emoji: 🤖
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+pinned: false
+---
+
 # University of Swat AI-Powered Web Application
 
 This is a complete AI-powered web application for the University of Swat, featuring a React frontend and a FastAPI backend with a RAG (Retrieval-Augmented Generation) pipeline.
