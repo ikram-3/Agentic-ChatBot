@@ -35,11 +35,24 @@ def fetch_summary(title: str) -> dict | None:
         slug = title.strip().replace(" ", "_")
         resp = requests.get(WIKI_SUMMARY_URL.format(title=slug),
                             headers=HEADERS, timeout=6)
+        
+        # If 404, the title might be too specific. Try searching for it.
+        if resp.status_code == 404:
+            search_resp = requests.get(WIKI_SEARCH_URL, params={
+                "action": "query", "list": "search", "srsearch": title,
+                "srlimit": 1, "format": "json"
+            }, headers=HEADERS, timeout=6)
+            search_resp.raise_for_status()
+            search_results = search_resp.json().get("query", {}).get("search", [])
+            if search_results:
+                return fetch_summary(search_results[0]["title"])
+            return None
+
         resp.raise_for_status()
         data = resp.json()
         result = {
             "title": data.get("title", title),
-            "extract": data.get("extract", "")[:1200],   # cap at 1200 chars
+            "extract": data.get("extract", "")[:1200],
             "url": data.get("content_urls", {}).get("desktop", {}).get("page", ""),
         }
         _cache[cache_key] = {"data": result, "ts": now}

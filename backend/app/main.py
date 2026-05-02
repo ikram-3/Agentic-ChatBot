@@ -3,7 +3,12 @@ import sys
 import asyncio
 
 if sys.platform == 'win32':
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    # Force ProactorEventLoop on Windows to support subprocesses (needed for Playwright)
+    if not isinstance(asyncio.get_event_loop_policy(), asyncio.WindowsProactorEventLoopPolicy):
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+        print("[System] Windows ProactorEventLoopPolicy enforced.")
+    else:
+        print("[System] Windows ProactorEventLoopPolicy already active.")
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
