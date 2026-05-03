@@ -533,6 +533,15 @@ const Chatbot = () => {
       {/* ── Input ── */}
       <div className="input-zone">
         <div className="input-card">
+          <button
+            className={`think-input-btn ${thinkingEnabled ? 'active' : ''}`}
+            onClick={() => setThinkingEnabled(v => !v)}
+            title={thinkingEnabled ? 'Thinking Enabled (Premium AI Reasoning)' : 'Thinking Disabled (Fast Direct Response)'}
+            disabled={isStreaming}
+          >
+            <Brain size={16} />
+          </button>
+          
           <textarea
             ref={textareaRef}
             value={input}
@@ -544,15 +553,6 @@ const Chatbot = () => {
             disabled={isStreaming}
           />
           <div className="input-actions">
-            <button
-              className={`think-input-btn ${thinkingEnabled ? 'active' : ''}`}
-              onClick={() => setThinkingEnabled(v => !v)}
-              title={thinkingEnabled ? 'Thinking Enabled (Premium AI Reasoning)' : 'Thinking Disabled (Fast Direct Response)'}
-              disabled={isStreaming}
-            >
-              <Brain size={16} />
-            </button>
-
             {isStreaming ? (
               <button className="action-btn stop-btn" onClick={stopStreaming} title="Stop generating">
                 <Square size={15} fill="currentColor" />
