@@ -42,8 +42,8 @@ def load_verification_data():
 async def chat_endpoint(request: ChatRequest):
     """Non-streaming endpoint for compatibility."""
     try:
-        reply = query_rag(request.message)
-        return ChatResponse(reply=reply)
+        reply = await query_rag(request.message)
+        return ChatResponse(reply=str(reply) if reply else "")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
