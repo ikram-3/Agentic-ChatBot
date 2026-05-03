@@ -23,7 +23,7 @@ SyntaxHighlighter.registerLanguage('py', python);
 const API_BASE = '/api';
 
 /* ── Constants & Helpers ── */
-const WIDGET_TOKEN_RE = /(?:\[\s*)?WIDGET:([^\s\]]+(?:\s+[^\s\]]+)*)(?:\s*\])?/gi;
+const WIDGET_TOKEN_RE = /(?:[\[<]\s*)?WIDGET:([^\s\]>]+(?:\s+[^\s\]>]+)*)(?:\s*[\]>])?/gi;
 
 const DOMAIN_LABELS = {
   'uswat.edu.pk':  'University of Swat',

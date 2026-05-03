@@ -596,7 +596,7 @@ async def query_rag_stream(query: str, history: list = None, thinking_enabled: b
                             # Sanitize leaked XML tool tags from content
                             import re as _re
                             clean = _re.sub(
-                                r'</?(?:function_calls?|invoke|tool_use|tool_result)[^>]*>|/[a-z_]+</function>',
+                                r'</?(?:function_calls?|invoke|tool_use|tool_result|function|call|step)[^>]*>|/[a-z_]+</function>|<[a-z_]+(?:\s+[a-z_]+="[^"]*")*\s*/?>',
                                 '', event_msg.content, flags=_re.IGNORECASE
                             )
                             if clean:

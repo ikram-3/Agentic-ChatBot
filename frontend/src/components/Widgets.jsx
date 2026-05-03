@@ -38,7 +38,7 @@ const TikTokIcon = () => (
 
 /* ── Widget parser ── */
 export function parseWidgets(text) {
-  const WIDGET_RE = /(?:\[\s*)?WIDGET:([^\s\]]+(?:\s+[^\s\]]+)*)(?:\s*\])?/gi;
+  const WIDGET_RE = /(?:[\[<]\s*)?WIDGET:([^\s\]>]+(?:\s+[^\s\]>]+)*)(?:\s*[\]>])?/gi;
   const widgets = [];
   let match;
   while ((match = WIDGET_RE.exec(text)) !== null) {
@@ -54,7 +54,7 @@ export function parseWidgets(text) {
       widgets.push({ type, params });
     }
   }
-  const cleanText = text.replace(/\[WIDGET:[^\]]+\]/gi, '').replace(/\n{3,}/g, '\n\n').trim();
+  const cleanText = text.replace(/[\[<]WIDGET:[^\]>]+[\]>]/gi, '').replace(/\n{3,}/g, '\n\n').trim();
   return { cleanText, widgets };
 }
 
