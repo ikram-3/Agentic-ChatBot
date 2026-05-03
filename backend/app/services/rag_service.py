@@ -598,7 +598,7 @@ async def query_rag_stream(query: str, history: list = None, thinking_enabled: b
                             clean = _re.sub(
                                 r'</?(?:function_calls?|invoke|tool_use|tool_result)[^>]*>|/[a-z_]+</function>',
                                 '', event_msg.content, flags=_re.IGNORECASE
-                            ).strip()
+                            )
                             if clean:
                                 yield {"type": "token", "token": clean}
 
