@@ -241,11 +241,12 @@ const Chatbot = () => {
     drainerRef.current = setInterval(() => {
       const queue = charQueueRef.current;
       if (queue.length === 0) return;
-      const chunk = queue.splice(0, 5).join('');
+      // Drain up to 12 chars per tick at 12ms = ~1000 chars/sec (smooth but fast)
+      const chunk = queue.splice(0, 12).join('');
       setMessages(prev => prev.map(m =>
         m.id === botId ? { ...m, text: m.text + chunk } : m
       ));
-    }, 18);
+    }, 12);
   }, []);
 
   const stopDrainer = useCallback(() => {
@@ -260,11 +261,11 @@ const Chatbot = () => {
     thinkDrainerRef.current = setInterval(() => {
       const q = thinkQueueRef.current;
       if (q.length === 0) return;
-      const chunk = q.splice(0, 4).join('');
+      const chunk = q.splice(0, 10).join('');
       setMessages(prev => prev.map(m =>
         m.id === botId ? { ...m, thinking: (m.thinking || '') + chunk } : m
       ));
-    }, 16);
+    }, 12);
   }, []);
 
   const stopThinkDrainer = useCallback(() => {
@@ -386,12 +387,8 @@ const Chatbot = () => {
               // ── Token: final answer streaming ────────────────────────────
               case 'token':
                 if (event.token) {
-                  if (!thinkingReceived) {
-                    // If no thinking yet, start drainer immediately
-                    startDrainer(botId);
-                  } else if (!drainerRef.current) {
-                    startDrainer(botId);
-                  }
+                  // Always start drainer immediately on first token
+                  if (!drainerRef.current) startDrainer(botId);
                   charQueueRef.current.push(...event.token.split(''));
                 }
                 break;
@@ -421,15 +418,21 @@ const Chatbot = () => {
         }
       }
 
-      // Wait for char queue to drain
-      await new Promise(resolve => {
-        const check = setInterval(() => {
-          if (charQueueRef.current.length === 0) {
-            clearInterval(check);
-            resolve();
-          }
-        }, 20);
-      });
+      // Stream done — flush any remaining chars instantly to prevent truncation
+      stopDrainer();
+      stopThinkDrainer();
+      const remainingChars = charQueueRef.current.splice(0);
+      const remainingThink = thinkQueueRef.current.splice(0);
+      if (remainingChars.length > 0 || remainingThink.length > 0) {
+        setMessages(prev => prev.map(m => {
+          if (m.id !== botId) return m;
+          return {
+            ...m,
+            text: m.text + remainingChars.join(''),
+            thinking: (m.thinking || '') + remainingThink.join(''),
+          };
+        }));
+      }
 
     } catch (err) {
       stopDrainer();
@@ -444,8 +447,7 @@ const Chatbot = () => {
         ));
       }
     } finally {
-      stopDrainer();
-      stopThinkDrainer();
+      // Drainers already stopped above — just clean up state
       charQueueRef.current = [];
       thinkQueueRef.current = [];
       setMessages(prev => prev.map(m =>
