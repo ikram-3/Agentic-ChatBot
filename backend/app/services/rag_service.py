@@ -268,6 +268,11 @@ You have exactly 3 tools. Do NOT try to call anything else:
 2. `deep_scrape_with_playwright` — deep-scrapes a specific URL. Takes one argument: `url` (string).
 3. `search_wikipedia_topic` — searches Wikipedia for a topic. Takes one argument: `query` (string).
 
+**NEVER call any tool for:**
+- Greetings ("hello", "hi", "assalam", "shukriya", "thanks", "ok", "great", "nice")
+- Casual reactions ("oh", "wow", "interesting", "i see", "good", "perfect", short acknowledgments)
+- Responses that are already answered by the context below
+
 If the user asks something you already know from the context below, just answer directly — no need to call any tool.
 
 ---
@@ -578,7 +583,14 @@ async def query_rag_stream(query: str, history: list = None, thinking_enabled: b
                     if msg_type not in ("ToolMessage", "SystemMessage"):
                         # Skip if this is just a tool-call declaration with no text
                         if not (hasattr(event_msg, "tool_calls") and event_msg.tool_calls and not event_msg.content.strip()):
-                            yield {"type": "token", "token": event_msg.content}
+                            # Sanitize leaked XML tool tags from content
+                            import re as _re
+                            clean = _re.sub(
+                                r'</?(?:function_calls?|invoke|tool_use|tool_result)[^>]*>|/[a-z_]+</function>',
+                                '', event_msg.content, flags=_re.IGNORECASE
+                            ).strip()
+                            if clean:
+                                yield {"type": "token", "token": clean}
 
         except Exception as e:
             error_str = str(e)

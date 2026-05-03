@@ -58,9 +58,16 @@ const TOOL_ICONS = {
 
 const getToolIcon = (toolName) => TOOL_ICONS[toolName] || <Sparkles size={13} />;
 
+/* Strip leaked LLM tool call XML artifacts from response text */
+const TOOL_ARTIFACT_RE = /(<\/?(?:function_calls?|invoke|tool_use|tool_result|antml:[\w:]+)[^>]*>|<[a-z_]+>[^<]{0,120}<\/[a-z_]+>|\/[a-z_]+<\/function>)/gi;
+
 /* ── Markdown Renderer ── */
 const MarkdownRenderer = ({ text }) => {
-  const safeText = (text || '').replace(WIDGET_TOKEN_RE, '').trim();
+  const safeText = (text || '')
+    .replace(WIDGET_TOKEN_RE, '')      // remove widget tokens from body
+    .replace(TOOL_ARTIFACT_RE, '')     // strip leaked XML tool tags
+    .replace(/\n{3,}/g, '\n\n')        // collapse excessive newlines
+    .trim();
   return (
     <div className="markdown-body">
       <ReactMarkdown
