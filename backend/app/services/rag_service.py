@@ -434,16 +434,26 @@ async def fetch_all_context(query: str, pinecone_text: str) -> str:
 
 
 async def query_rag(query: str) -> str:
-    if not settings.GROQ_API_KEY or not settings.PINECONE_API_KEY or qa_chain is None:
+    if not settings.GROQ_API_KEY or not settings.PINECONE_API_KEY or llm_global is None:
         return f"Mock response to: {query} (Please set GROQ_API_KEY and PINECONE_API_KEY in .env to enable AI)"
     try:
-        # For the sync version, we still need to await the context fetching
+        from langchain_core.messages import HumanMessage, SystemMessage
+        from datetime import datetime
+
         pinecone_docs_list = retriever_global.invoke(query)
         pinecone_text = "\n\n".join(d.page_content for d in pinecone_docs_list)
         full_context = await fetch_all_context(query, pinecone_text)
-        
-        # We need a custom prompt injection here since qa_chain is pre-built
-        return await qa_chain.ainvoke({"context": full_context, "question": query})
+
+        current_datetime = datetime.now().strftime("%A, %B %d, %Y at %I:%M %p")
+        system_prompt = QA_CHAIN_PROMPT.format(
+            context=full_context,
+            current_datetime=current_datetime
+        )
+        response = await llm_global.ainvoke([
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=query),
+        ])
+        return response.content if hasattr(response, "content") else str(response)
     except Exception as e:
         return f"Error processing query: {str(e)}"
 
