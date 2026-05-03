@@ -490,14 +490,6 @@ const Chatbot = () => {
           </div>
         </div>
         <div className="header-actions">
-          <button
-            className={`think-toggle-btn ${thinkingEnabled ? 'active' : ''}`}
-            onClick={() => setThinkingEnabled(v => !v)}
-            title={thinkingEnabled ? 'Thinking ON — click to disable' : 'Thinking OFF — click to enable'}
-          >
-            <Brain size={15} />
-            <span className="think-toggle-label">{thinkingEnabled ? 'Thinking ON' : 'Thinking OFF'}</span>
-          </button>
           <button className="theme-btn" onClick={toggleTheme} title="Toggle theme">
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
@@ -552,6 +544,15 @@ const Chatbot = () => {
             disabled={isStreaming}
           />
           <div className="input-actions">
+            <button
+              className={`think-input-btn ${thinkingEnabled ? 'active' : ''}`}
+              onClick={() => setThinkingEnabled(v => !v)}
+              title={thinkingEnabled ? 'Thinking Enabled (Premium AI Reasoning)' : 'Thinking Disabled (Fast Direct Response)'}
+              disabled={isStreaming}
+            >
+              <Brain size={16} />
+            </button>
+
             {isStreaming ? (
               <button className="action-btn stop-btn" onClick={stopStreaming} title="Stop generating">
                 <Square size={15} fill="currentColor" />
