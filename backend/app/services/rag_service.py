@@ -23,15 +23,13 @@ from app.services.scraper import get_live_context
 from langchain.agents import create_agent
 from app.services.agent_tools import fast_scrape_university_news, deep_scrape_with_playwright, search_wikipedia_topic
 
-# ── Global Variables ──────────────────────────────────────────────────────────
 qa_chain = None
 agent_executor = None
 retriever_global = None
-llm_global = None          # Model 2: Responder (llama-3.3-70b-versatile)
-planner_llm = None         # Model 1: Planner  (llama-3.1-8b-instant)
+llm_global = None          
+planner_llm = None
 QA_CHAIN_PROMPT = None
 
-# ── Human-readable Tool Name Mapping ──────────────────────────────────────────
 TOOL_DISPLAY_NAMES = {
     "fast_scrape_university_news":  {"label": "Checking University Website",  "icon": "🌐"},
     "deep_scrape_with_playwright":  {"label": "Deep Reading Web Page",         "icon": "🕸️"},
@@ -95,16 +93,31 @@ def get_vector_store_path():
 def init_rag():
     global qa_chain, retriever_global, llm_global, planner_llm, agent_executor
 
-    if not settings.GROQ_API_KEY or not settings.PINECONE_API_KEY:
-        print("Warning: GROQ_API_KEY or PINECONE_API_KEY not set. RAG will return mock responses.")
+    # ── Check for keys ───────────────────────────────────────────────────────
+    missing_keys = []
+    if not settings.GROQ_API_KEY: missing_keys.append("GROQ_API_KEY")
+    if not settings.PINECONE_API_KEY: missing_keys.append("PINECONE_API_KEY")
+    
+    if missing_keys:
+        print(f"⚠️ [RAG] Missing API keys: {', '.join(missing_keys)}. AI will return mock responses.")
         return
 
     try:
-        # ── Pinecone setup ────────────────────────────────────────────────────
-        pc = Pinecone(api_key=settings.PINECONE_API_KEY)
-        index_name = settings.PINECONE_INDEX_NAME
+        # ── Pinecone setup with retry ─────────────────────────────────────────
+        import time
+        pc = None
+        for attempt in range(3):
+            try:
+                pc = Pinecone(api_key=settings.PINECONE_API_KEY)
+                index_name = settings.PINECONE_INDEX_NAME
+                all_indexes = [index_info["name"] for index_info in pc.list_indexes()]
+                break
+            except Exception as e:
+                if attempt == 2: raise e
+                print(f"⚠️ [Pinecone] Connection attempt {attempt+1} failed. Retrying...")
+                time.sleep(2)
 
-        if index_name not in [index_info["name"] for index_info in pc.list_indexes()]:
+        if index_name not in all_indexes:
             pc.create_index(
                 name=index_name,
                 dimension=1024,
@@ -243,7 +256,7 @@ def init_rag():
 
         # ── Model 2: Responder ────────────────────────────────────────────────
         llm_global = ChatGroq(
-            temperature=0.2,
+            temperature=0.7,
             model_name="llama-3.1-8b-instant",   
             api_key=settings.GROQ_API_KEY
         )
@@ -251,7 +264,7 @@ def init_rag():
         # ── Model 1: Planner (same model, lower temperature) ─────────────────
         planner_llm = ChatGroq(
             temperature=0.1,
-            model_name="llama-3.1-8b-instant",   # 500K tokens/day free tier
+            model_name="llama-3.1-8b-instant",
             api_key=settings.GROQ_API_KEY
         )
 
@@ -435,7 +448,8 @@ async def fetch_all_context(query: str, pinecone_text: str) -> str:
 
 async def query_rag(query: str) -> str:
     if not settings.GROQ_API_KEY or not settings.PINECONE_API_KEY or llm_global is None:
-        return f"Mock response to: {query} (Please set GROQ_API_KEY and PINECONE_API_KEY in .env to enable AI)"
+        reason = "Missing API keys" if not settings.GROQ_API_KEY or not settings.PINECONE_API_KEY else "RAG initialization failed (check server logs for Pinecone/Groq errors)"
+        return f"⚠️ **AI Unavailable**: {reason}. I am running in offline mode."
     try:
         from langchain_core.messages import HumanMessage, SystemMessage
         from datetime import datetime
@@ -506,8 +520,9 @@ async def query_rag_stream(query: str, history: list = None, thinking_enabled: b
       {"type": "error",      "message": "..."}
     """
     if not settings.GROQ_API_KEY or not settings.PINECONE_API_KEY or agent_executor is None:
-        mock = "Mock response: set GROQ_API_KEY and PINECONE_API_KEY in .env to enable AI."
-        for word in mock.split():
+        reason = "Missing API keys" if not settings.GROQ_API_KEY or not settings.PINECONE_API_KEY else "RAG initialization failed (check terminal logs for connection errors)"
+        msg = f"⚠️ **AI Mode Unavailable**: {reason}. Please check your internet connection and .env file."
+        for word in msg.split():
             yield {"type": "token", "token": word + " "}
         return
 
@@ -587,13 +602,10 @@ async def query_rag_stream(query: str, history: list = None, thinking_enabled: b
                         active_tools.discard(tool_name)
                         yield {"type": "tool_end", "tool": tool_name}
 
-                # ── Stream final tokens ───────────────────────────────────────
                 if hasattr(event_msg, "content") and event_msg.content:
-                    # Only yield tokens from AI messages (not tool results)
                     if msg_type not in ("ToolMessage", "SystemMessage"):
-                        # Skip if this is just a tool-call declaration with no text
                         if not (hasattr(event_msg, "tool_calls") and event_msg.tool_calls and not event_msg.content.strip()):
-                            # Sanitize leaked XML tool tags from content
+
                             import re as _re
                             clean = _re.sub(
                                 r'</?(?:function_calls?|invoke|tool_use|tool_result|function|call|step)[^>]*>|/[a-z_]+</function>|<[a-z_]+(?:\s+[a-z_]+="[^"]*")*\s*/?>',
@@ -617,7 +629,7 @@ async def query_rag_stream(query: str, history: list = None, thinking_enabled: b
                         f"⚠️ **AI Rate Limit Reached**\n\n"
                         f"The AI model has reached its daily token limit. "
                         f"Please try again in **{wait_str}**.\n\n"
-                        f"💡 *Tip: This is a free-tier Groq limit (100K tokens/day). "
+                        f"*Tip: This is a free-tier Groq limit (100K tokens/day). "
                         f"Upgrade at [console.groq.com](https://console.groq.com/settings/billing) for more.*"
                     )
                 }
@@ -634,7 +646,7 @@ async def query_rag_stream(query: str, history: list = None, thinking_enabled: b
                 except Exception as fb_e:
                     fb_err = str(fb_e)
                     if "rate_limit_exceeded" in fb_err or "429" in fb_err:
-                        yield {"type": "error", "message": "⚠️ Rate limit reached on all models. Please wait a few minutes and try again."}
+                        yield {"type": "error", "message": " Rate limit reached on all models. Please wait a few minutes and try again."}
                     else:
                         yield {"type": "error", "message": "I encountered an issue. Please try rephrasing your question."}
             else:
@@ -644,5 +656,4 @@ async def query_rag_stream(query: str, history: list = None, thinking_enabled: b
         yield {"type": "error", "message": f"Error processing query: {str(e)}"}
 
 
-# Initialize on import
 init_rag()

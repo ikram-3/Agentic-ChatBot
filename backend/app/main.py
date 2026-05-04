@@ -3,7 +3,7 @@ import sys
 import asyncio
 
 if sys.platform == 'win32':
-    # Force ProactorEventLoop on Windows to support subprocesses (needed for Playwright)
+    # Force ProactorEventLoop on Windows to support subprocesses
     if not isinstance(asyncio.get_event_loop_policy(), asyncio.WindowsProactorEventLoopPolicy):
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
         print("[System] Windows ProactorEventLoopPolicy enforced.")
@@ -30,7 +30,6 @@ app.add_middleware(
 app.include_router(router, prefix="/api")
 
 # Serve Frontend
-# Make sure the frontend is built into the 'frontend/dist' directory
 frontend_path = os.path.join(os.getcwd(), "frontend", "dist")
 
 if os.path.exists(frontend_path):
@@ -38,7 +37,6 @@ if os.path.exists(frontend_path):
 
     @app.get("/{full_path:path}")
     async def serve_frontend(request: Request, full_path: str):
-        # If the path starts with 'api', let the router handle it (though include_router is above, this is a safety)
         if full_path.startswith("api"):
             return None
         
