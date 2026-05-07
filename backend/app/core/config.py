@@ -7,7 +7,14 @@ class Settings(BaseSettings):
     PINECONE_INDEX_NAME: str = "uos-assistant"
     GOOGLE_MAPS_API_KEY: str = ""
     
+    # MySQL Settings
+    MYSQL_HOST: str = "localhost"
+    MYSQL_USER: str = "root"
+    MYSQL_PASSWORD: str = ""
+    MYSQL_DATABASE: str = "uos_chatbot"
+    
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
 settings = Settings()
