@@ -12,3 +12,6 @@ python-dotenv
 beautifulsoup4
 requests
 python-docx
+aiomysql
+cryptography
+pymysql
