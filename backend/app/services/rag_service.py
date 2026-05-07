@@ -590,7 +590,7 @@ def _upsert_vectors(
     print(f"  ✅ Upserted {len(vectors)} vectors.")
 
 
-def init_rag() -> None:
+async def init_rag() -> None:
     global qa_chain, agent_executor, retriever_global
     global llm_global, planner_llm, QA_CHAIN_PROMPT, _WIDGET_REGISTRY
 
@@ -1044,4 +1044,4 @@ def _unavailable_message() -> str:
 # Bootstrap
 # ─────────────────────────────────────────────────────────────────────────────
 
-init_rag()
+# init_rag()

@@ -29,6 +29,11 @@ app.add_middleware(
 
 app.include_router(router, prefix="/api")
 
+@app.on_event("startup")
+async def startup_event():
+    from app.services.rag_service import init_rag
+    await init_rag()
+
 # Serve Frontend
 frontend_path = os.path.join(os.getcwd(), "frontend", "dist")
 
