@@ -32,132 +32,111 @@ async def init_db():
         await cur.execute(f"CREATE DATABASE IF NOT EXISTS {MYSQL_DATABASE}")
         await cur.execute(f"USE {MYSQL_DATABASE}")
         
-        # 1. Students Table
+        # 1. Departments Table
+        await cur.execute("""
+            CREATE TABLE IF NOT EXISTS departments (
+                dept_id INT AUTO_INCREMENT PRIMARY KEY,
+                dept_name VARCHAR(100) NOT NULL UNIQUE,
+                building VARCHAR(100),
+                head_of_dept VARCHAR(100)
+            )
+        """)
+
+        # 2. Programs Table
+        await cur.execute("""
+            CREATE TABLE IF NOT EXISTS programs (
+                program_id INT AUTO_INCREMENT PRIMARY KEY,
+                dept_id INT,
+                program_name VARCHAR(100) NOT NULL,
+                duration_years INT DEFAULT 4,
+                total_semesters INT DEFAULT 8,
+                total_fee_estimate DECIMAL(10, 2),
+                FOREIGN KEY (dept_id) REFERENCES departments(dept_id)
+            )
+        """)
+        
+        # 3. Students Table
         await cur.execute("""
             CREATE TABLE IF NOT EXISTS students (
                 roll_no VARCHAR(50) PRIMARY KEY,
+                dept_id INT,
+                program_id INT,
                 name VARCHAR(100) NOT NULL,
                 father_name VARCHAR(100),
-                program VARCHAR(100),
-                department VARCHAR(100),
-                semester VARCHAR(20),
-                section VARCHAR(10),
-                status VARCHAR(20) DEFAULT 'Active'
+                current_semester INT DEFAULT 1,
+                section CHAR(1) DEFAULT 'A',
+                status VARCHAR(20) DEFAULT 'Active',
+                FOREIGN KEY (dept_id) REFERENCES departments(dept_id),
+                FOREIGN KEY (program_id) REFERENCES programs(program_id)
             )
         """)
         
-        # 2. Fee Slips Table
+        # 4. Fee Slips Table
         await cur.execute("""
             CREATE TABLE IF NOT EXISTS fee_slips (
                 ref_no VARCHAR(50) PRIMARY KEY,
-                student_roll_no VARCHAR(50),
-                amount INT,
-                bank VARCHAR(100),
-                branch VARCHAR(100),
+                roll_no VARCHAR(50),
+                amount_due DECIMAL(10, 2),
+                amount_paid DECIMAL(10, 2) DEFAULT 0,
                 payment_date DATE,
+                bank_name VARCHAR(100),
+                branch_name VARCHAR(100),
                 status VARCHAR(20),
                 fee_type VARCHAR(50),
                 challan_no VARCHAR(50),
-                FOREIGN KEY (student_roll_no) REFERENCES students(roll_no)
-            )
-        """)
-        
-        # 3. Faculty Table
-        await cur.execute("""
-            CREATE TABLE IF NOT EXISTS faculty (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                name VARCHAR(100) NOT NULL,
-                designation VARCHAR(100),
-                department VARCHAR(100),
-                type VARCHAR(20), -- 'Permanent', 'Visiting'
-                email VARCHAR(100),
-                specialization VARCHAR(255)
-            )
-        """)
-
-        # 4. Exam Records
-        await cur.execute("""
-            CREATE TABLE IF NOT EXISTS exam_records (
-                roll_no VARCHAR(50) PRIMARY KEY,
-                exam_type VARCHAR(50),
-                session VARCHAR(50),
-                start_date DATE,
-                end_date DATE,
-                center VARCHAR(255),
                 FOREIGN KEY (roll_no) REFERENCES students(roll_no)
             )
         """)
-
-        # 5. Exam Subjects
+        
+        # 5. Faculty Table
         await cur.execute("""
-            CREATE TABLE IF NOT EXISTS exam_subjects (
-                id INT AUTO_INCREMENT PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS faculty (
+                faculty_id INT AUTO_INCREMENT PRIMARY KEY,
+                dept_id INT,
+                name VARCHAR(100) NOT NULL,
+                designation VARCHAR(100),
+                faculty_type VARCHAR(20), -- 'Permanent', 'Visiting'
+                email VARCHAR(100),
+                specialization TEXT,
+                FOREIGN KEY (dept_id) REFERENCES departments(dept_id)
+            )
+        """)
+
+        # 6. Exam Schedules
+        await cur.execute("""
+            CREATE TABLE IF NOT EXISTS exam_schedules (
+                schedule_id INT AUTO_INCREMENT PRIMARY KEY,
                 roll_no VARCHAR(50),
-                subject_name VARCHAR(255),
+                exam_type VARCHAR(50),
+                semester INT,
+                exam_date DATE,
+                start_time TIME,
+                venue VARCHAR(100),
                 FOREIGN KEY (roll_no) REFERENCES students(roll_no)
             )
         """)
 
     conn.close()
-    print("Database initialized successfully.")
-
-async def seed_data():
-    """Seed initial data into the database."""
-    pool = await get_db_pool()
-    async with pool.acquire() as conn:
-        async with conn.cursor() as cur:
-            # Seed Students
-            students = [
-                ('CS-2026-F-001', 'Muhammad Ikram', 'Sher Muhammad', 'BS Computer Science', 'CS & IT', '1st', 'A'),
-                ('SE-2026-F-015', 'Sara Khan', 'Imran Khan', 'BS Software Engineering', 'CS & IT', '2nd', 'B'),
-                ('BBA-2026-S-008', 'Ali Hassan', 'Hassan Ali', 'BBA', 'Management Sciences', '3rd', 'A'),
-                ('PHR-2026-F-022', 'Fatima Noor', 'Noor Muhammad', 'BS Pharmacy (Pharm-D)', 'Pharmacy', '4th', 'A'),
-            ]
-            await cur.executemany(
-                "INSERT IGNORE INTO students (roll_no, name, father_name, program, department, semester, section) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                students
-            )
-
-            # Seed Faculty
-            faculty = [
-                ('Dr. Hassan Ahmed', 'Professor', 'Computer Science', 'Permanent', 'hassan@uswat.edu.pk', 'Machine Learning'),
-                ('Dr. Nadia Khan', 'Associate Professor', 'Computer Science', 'Permanent', 'nadia@uswat.edu.pk', 'Cyber Security'),
-                ('Mr. Jawad Shah', 'Lecturer', 'Management Sciences', 'Visiting', 'jawad@uswat.edu.pk', 'Marketing'),
-                ('Dr. Saira Ali', 'Assistant Professor', 'Pharmacy', 'Permanent', 'saira@uswat.edu.pk', 'Clinical Pharmacy'),
-            ]
-            await cur.executemany(
-                "INSERT IGNORE INTO faculty (name, designation, department, type, email, specialization) VALUES (%s, %s, %s, %s, %s, %s)",
-                faculty
-            )
-
-            # Seed Fee Slips
-            slips = [
-                ('UOS-2026-001234', 'CS-2026-F-001', 45000, 'HBL', 'Mingora', '2026-08-10', 'Verified', 'Semester Fee', 'CHN-2026-78432'),
-                ('UOS-2026-001235', 'SE-2026-F-015', 45000, 'NBP', 'Swat', '2026-08-12', 'Verified', 'Semester Fee', 'CHN-2026-78433'),
-                ('UOS-2026-001236', 'BBA-2026-S-008', 45000, 'UBL', 'Kanju', '2026-08-15', 'Pending', 'Semester Fee', 'CHN-2026-78434'),
-            ]
-            await cur.executemany(
-                "INSERT IGNORE INTO fee_slips (ref_no, student_roll_no, amount, bank, branch, payment_date, status, fee_type, challan_no) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                slips
-            )
-            
-    pool.close()
-    await pool.wait_closed()
-    print("Data seeded successfully.")
+    print("Database schema verified/created.")
 
 async def get_student_info(roll_no):
     pool = await get_db_pool()
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute("SELECT * FROM students WHERE roll_no = %s", (roll_no,))
+            await cur.execute("""
+                SELECT s.*, d.dept_name as department, p.program_name as program
+                FROM students s
+                LEFT JOIN departments d ON s.dept_id = d.dept_id
+                LEFT JOIN programs p ON s.program_id = p.program_id
+                WHERE s.roll_no = %s
+            """, (roll_no,))
             student = await cur.fetchone()
             if student:
-                await cur.execute("SELECT * FROM exam_records WHERE roll_no = %s", (roll_no,))
+                # Use exam_schedules instead of exam_records
+                await cur.execute("SELECT * FROM exam_schedules WHERE roll_no = %s", (roll_no,))
                 exam = await cur.fetchone()
-                await cur.execute("SELECT subject_name FROM exam_subjects WHERE roll_no = %s", (roll_no,))
-                subjects = await cur.fetchall()
                 student['exam_record'] = exam
-                student['subjects'] = [s['subject_name'] for s in subjects]
+                student['subjects'] = [] # Subjects table is deprecated in favor of exam_schedules content if needed
             return student
 
 async def get_fee_info(ref_no):
@@ -165,9 +144,11 @@ async def get_fee_info(ref_no):
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute("""
-                SELECT f.*, s.name as student_name, s.program 
+                SELECT f.*, s.name as student_name, p.program_name as program,
+                       f.amount_paid as amount, f.bank_name as bank, f.branch_name as branch
                 FROM fee_slips f
-                JOIN students s ON f.student_roll_no = s.roll_no
+                JOIN students s ON f.roll_no = s.roll_no
+                LEFT JOIN programs p ON s.program_id = p.program_id
                 WHERE f.ref_no = %s
             """, (ref_no,))
             return await cur.fetchone()
@@ -176,12 +157,17 @@ async def get_faculty_info(department=None):
     pool = await get_db_pool()
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
+            query = """
+                SELECT f.*, d.dept_name as department, f.faculty_type as type
+                FROM faculty f
+                LEFT JOIN departments d ON f.dept_id = d.dept_id
+            """
             if department:
-                await cur.execute("SELECT * FROM faculty WHERE department LIKE %s", (f"%{department}%",))
+                query += " WHERE d.dept_name LIKE %s"
+                await cur.execute(query, (f"%{department}%",))
             else:
-                await cur.execute("SELECT * FROM faculty")
+                await cur.execute(query)
             return await cur.fetchall()
 
 if __name__ == "__main__":
     asyncio.run(init_db())
-    asyncio.run(seed_data())
