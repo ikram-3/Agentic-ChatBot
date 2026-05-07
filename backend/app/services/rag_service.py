@@ -1,5 +1,6 @@
 import os
 import asyncio
+import re
 import glob
 import json
 import uuid
@@ -563,7 +564,6 @@ def is_complex_query(query: str) -> bool:
         return True
 
     # Check for ID patterns (Roll numbers, Reference numbers)
-    import re
     if re.search(r'(UOS|CS|SE|BBA|PHR|ENG)-\d{4}', q, re.I):
         return True
 
