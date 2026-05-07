@@ -12,14 +12,14 @@ _cache = {"data": None, "ts": 0}
 CACHE_TTL = 1800  # 30 minutes
 BASE_URL = "https://www.uswat.edu.pk"
 
-async def _get(url: str, timeout: int = 6) -> BeautifulSoup | None:
+async def _get(url: str, timeout: int = 4) -> BeautifulSoup | None:
     try:
         async with httpx.AsyncClient(follow_redirects=True) as client:
             resp = await client.get(url, timeout=timeout, headers={
                 "User-Agent": "Mozilla/5.0 (compatible; UoS-Assistant/1.0)"
             })
             resp.raise_for_status()
-            return BeautifulSoup(resp.text, "html.parser")
+            return BeautifulSoup(resp.text, "lxml" if "lxml" in str(BeautifulSoup) else "html.parser")
     except Exception:
         return None
 
@@ -33,8 +33,12 @@ async def scrape_uos() -> dict:
 
     soup = await _get(BASE_URL)
     if soup:
-        # Try to pull news/announcement items
-        for tag in soup.select("article, .news-item, .announcement, .post, .entry"):
+        # Targeted selection for main news/announcements
+        items = soup.select(".news-ticker a, .latest-news li, .announcement-item, article.post")
+        if not items:
+            items = soup.select("article, .news-item, .announcement")
+            
+        for tag in items:
             title_el = tag.find(["h2", "h3", "h4", "a"])
             if not title_el:
                 continue

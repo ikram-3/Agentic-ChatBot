@@ -38,7 +38,8 @@ const TikTokIcon = () => (
 
 /* ── Widget parser ── */
 export function parseWidgets(text) {
-  const WIDGET_RE = /(?:[\[<]\s*)?WIDGET:([^\s\]>]+(?:\s+[^\s\]>]+)*)(?:\s*[\]>])?/gi;
+  // Robust regex to find WIDGET: tokens even if wrapped in bold/italics like [**WIDGET:type**]
+  const WIDGET_RE = /[\[<][^\]>]*?WIDGET:([^\s\*_\]>]+(?:\s+[^\s\*_\]>]+)*?)[^\]>]*?[\]>]/gi;
   const widgets = [];
   let match;
   while ((match = WIDGET_RE.exec(text)) !== null) {
@@ -49,12 +50,14 @@ export function parseWidgets(text) {
     } else {
       const type = raw.slice(0, colonIdx).trim().toLowerCase();
       const params = raw.slice(colonIdx + 1).trim();
+      // Skip placeholders
       if (params.includes('<') && params.includes('>')) continue;
       if (/^(ref_no|roll_no|your_number|ref|number)$/i.test(params)) continue;
       widgets.push({ type, params });
     }
   }
-  const cleanText = text.replace(/[\[<]WIDGET:[^\]>]+[\]>]/gi, '').replace(/\n{3,}/g, '\n\n').trim();
+  // Clean text: remove anything that looks like a widget bracket block, including potential bold wrappers
+  const cleanText = text.replace(/(\*\*?|__?)?[\[<][^\]>]*?WIDGET:[^\]>]*?[\]>](\*\*?|__?)?/gi, '').replace(/\n{3,}/g, '\n\n').trim();
   return { cleanText, widgets };
 }
 

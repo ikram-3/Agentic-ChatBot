@@ -62,6 +62,8 @@ async def fetch_summary(title: str) -> dict | None:
         print(f"[Wikipedia] Could not fetch '{title}': {e}")
         return None
 
+import asyncio
+
 async def search_wikipedia(query: str, limit: int = 3) -> list[dict]:
     """Search Wikipedia and return top matches (Async)."""
     try:
@@ -72,12 +74,11 @@ async def search_wikipedia(query: str, limit: int = 3) -> list[dict]:
             }, headers=HEADERS, timeout=6)
             resp.raise_for_status()
             results = resp.json().get("query", {}).get("search", [])
-            out = []
-            for r in results:
-                summary = await fetch_summary(r["title"])
-                if summary:
-                    out.append(summary)
-            return out
+            
+            # Parallel fetch summaries for all search results
+            tasks = [fetch_summary(r["title"]) for r in results]
+            summaries = await asyncio.gather(*tasks)
+            return [s for s in summaries if s]
     except Exception as e:
         print(f"[Wikipedia] Search failed for '{query}': {e}")
         return []
@@ -87,11 +88,25 @@ async def get_wiki_context(query: str = "") -> str:
     Return a formatted string of Wikipedia context suitable for LLM injection.
     Always includes core articles + search results if query is complex.
     """
-    lines = []
+    # 1. Parallel fetch all seed topics
+    seed_tasks = [fetch_summary(topic) for topic in SEED_TOPICS]
+    
+    # 2. Parallel fetch search results if query is provided
+    search_task = None
+    if query and len(query) > 4:
+        search_task = search_wikipedia(query, limit=1)
 
-    # Always include core articles
-    for topic in SEED_TOPICS:
-        info = await fetch_summary(topic)
+    # Gather everything
+    all_tasks = seed_tasks + ([search_task] if search_task else [])
+    results = await asyncio.gather(*all_tasks)
+    
+    seed_results = results[:len(SEED_TOPICS)]
+    extra_results = results[len(SEED_TOPICS)] if search_task else []
+
+    lines = []
+    
+    # Process seed results
+    for info in seed_results:
         if info and info.get("extract"):
             lines.append(f"## Wikipedia: {info['title']}")
             lines.append(info["extract"])
@@ -99,16 +114,14 @@ async def get_wiki_context(query: str = "") -> str:
                 lines.append(f"Source: {info['url']}")
             lines.append("")
 
-    # Additional search
-    if query and len(query) > 4:
-        search_results = await search_wikipedia(query, limit=1)
-        for r in search_results:
-            title_lower = r["title"].lower()
-            if any(t.lower() in title_lower or title_lower in t.lower() for t in SEED_TOPICS):
-                continue
-            if r.get("extract"):
-                lines.append(f"## Wikipedia: {r['title']}")
-                lines.append(r["extract"])
-                lines.append("")
+    # Process search results
+    for r in extra_results:
+        title_lower = r["title"].lower()
+        if any(t.lower() in title_lower or title_lower in t.lower() for t in SEED_TOPICS):
+            continue
+        if r.get("extract"):
+            lines.append(f"## Wikipedia: {r['title']}")
+            lines.append(r["extract"])
+            lines.append("")
 
     return "\n".join(lines).strip()

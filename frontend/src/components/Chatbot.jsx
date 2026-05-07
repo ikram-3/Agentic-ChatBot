@@ -20,10 +20,13 @@ SyntaxHighlighter.registerLanguage('python', python);
 SyntaxHighlighter.registerLanguage('js', js);
 SyntaxHighlighter.registerLanguage('py', python);
 
+import logo from '../assets/logo.png';
+
 const API_BASE = '/api';
+const BRAND_LOGO_SRC = logo;
 
 /* ── Constants & Helpers ── */
-const WIDGET_TOKEN_RE = /(?:[\[<]\s*)?WIDGET:([^\s\]>]+(?:\s+[^\s\]>]+)*)(?:\s*[\]>])?/gi;
+const WIDGET_TOKEN_RE = /(\*\*?|__?)?[\[<][^\]>]*?WIDGET:[^\]>]*?[\]>](\*\*?|__?)?/gi;
 
 const DOMAIN_LABELS = {
   'uswat.edu.pk':  'University of Swat',
@@ -58,8 +61,8 @@ const TOOL_ICONS = {
 
 const getToolIcon = (toolName) => TOOL_ICONS[toolName] || <Sparkles size={13} />;
 
-/* Strip leaked LLM tool call XML artifacts from response text */
-const TOOL_ARTIFACT_RE = /(<\/?(?:function_calls?|invoke|tool_use|tool_result|antml:[\w:]+)[^>]*>|<[a-z_]+>[^<]{0,120}<\/[a-z_]+>|\/[a-z_]+<\/function>)/gi;
+/* Strip leaked LLM tool call artifacts from response text */
+const TOOL_ARTIFACT_RE = /(<\/?(?:function_calls?|invoke|tool_use|tool_result|antml:[\w:]+)[^>]*>|<[a-z_]+>[^<]{0,120}<\/[a-z_]+>|\/[a-z_]+<\/function>|\*\*?\[WIDGET:.*?\]\*\*?)/gi;
 
 /* ── Markdown Renderer ── */
 const MarkdownRenderer = ({ text }) => {
@@ -204,12 +207,9 @@ const BotMessage = ({ msg }) => {
 };
 
 const SUGGESTIONS = [
+  { icon: <ShieldCheck size={15} />,   text: 'Verify my bank slip' },
   { icon: <ClipboardList size={15} />, text: 'What are the admission requirements?' },
-  { icon: <BookOpen size={15} />,      text: 'What programs does UoS offer?' },
-  { icon: <ShieldCheck size={15} />,   text: 'Verify bank slip UOS-2026-001234' },
-  { icon: <MapPin size={15} />,        text: 'Where is the university located?' },
   { icon: <Sparkles size={15} />,      text: 'What scholarships are available?' },
-  { icon: <ShieldCheck size={15} />,   text: 'Verify roll number CS-2026-F-001' },
 ];
 
 let msgId = 0;
@@ -219,18 +219,19 @@ const Chatbot = () => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [thinkingEnabled, setThinkingEnabled] = useState(true);
+  const [thinkingEnabled, setThinkingEnabled] = useState(false);
+  const [logoLoadFailed, setLogoLoadFailed] = useState(false);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
   const abortRef = useRef(null);
 
   // Answer typewriter queue
-  const charQueueRef = useRef([]);
-  const drainerRef = useRef(null);
+  const charQueueRef = useRef('');
+  const drainerRef = useRef(0);
   const activeBotIdRef = useRef(null);
   // Thinking typewriter queue
-  const thinkQueueRef = useRef([]);
-  const thinkDrainerRef = useRef(null);
+  const thinkQueueRef = useRef('');
+  const thinkDrainerRef = useRef(0);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -245,40 +246,47 @@ const Chatbot = () => {
 
   const startDrainer = useCallback((botId) => {
     if (drainerRef.current) return;
-    drainerRef.current = setInterval(() => {
+    const drain = () => {
       const queue = charQueueRef.current;
-      if (queue.length === 0) return;
-      // Drain up to 12 chars per tick at 12ms = ~1000 chars/sec (smooth but fast)
-      const chunk = queue.splice(0, 12).join('');
-      setMessages(prev => prev.map(m =>
-        m.id === botId ? { ...m, text: m.text + chunk } : m
-      ));
-    }, 12);
+      if (queue.length > 0) {
+        const chunk = queue.slice(0, 80);
+        charQueueRef.current = queue.slice(80);
+        setMessages(prev => prev.map(m =>
+          m.id === botId ? { ...m, text: m.text + chunk } : m
+        ));
+      }
+      drainerRef.current = window.requestAnimationFrame(drain);
+    };
+    drainerRef.current = window.requestAnimationFrame(drain);
   }, []);
 
   const stopDrainer = useCallback(() => {
     if (drainerRef.current) {
-      clearInterval(drainerRef.current);
-      drainerRef.current = null;
+      window.cancelAnimationFrame(drainerRef.current);
+      drainerRef.current = 0;
     }
   }, []);
 
   const startThinkDrainer = useCallback((botId) => {
     if (thinkDrainerRef.current) return;
-    thinkDrainerRef.current = setInterval(() => {
-      const q = thinkQueueRef.current;
-      if (q.length === 0) return;
-      const chunk = q.splice(0, 10).join('');
-      setMessages(prev => prev.map(m =>
-        m.id === botId ? { ...m, thinking: (m.thinking || '') + chunk } : m
-      ));
-    }, 12);
+    const drain = () => {
+      const queue = thinkQueueRef.current;
+      if (queue.length > 0) {
+        const chunk = queue.slice(0, 80);
+        thinkQueueRef.current = queue.slice(80);
+        setMessages(prev => prev.map(m =>
+          m.id === botId ? { ...m, thinking: (m.thinking || '') + chunk } : m
+        ));
+      }
+      thinkDrainerRef.current = window.requestAnimationFrame(drain);
+    };
+    thinkDrainerRef.current = window.requestAnimationFrame(drain);
   }, []);
 
   const stopThinkDrainer = useCallback(() => {
     if (thinkDrainerRef.current) {
-      clearInterval(thinkDrainerRef.current);
-      thinkDrainerRef.current = null;
+      window.cancelAnimationFrame(thinkDrainerRef.current);
+      thinkDrainerRef.current = 0;
     }
   }, []);
 
@@ -288,8 +296,8 @@ const Chatbot = () => {
     const userMsg = { id: ++msgId, text: text.trim(), isBot: false };
     const botId = ++msgId;
     activeBotIdRef.current = botId;
-    charQueueRef.current = [];
-    thinkQueueRef.current = [];
+    charQueueRef.current = '';
+    thinkQueueRef.current = '';
     stopDrainer();
     stopThinkDrainer();
 
@@ -352,7 +360,7 @@ const Chatbot = () => {
               case 'thinking_token':
                 thinkingReceived = true;
                 if (event.token) {
-                  thinkQueueRef.current.push(...event.token.split(''));
+                  thinkQueueRef.current += event.token;
                 }
                 break;
 
@@ -360,7 +368,7 @@ const Chatbot = () => {
               case 'thinking':
                 thinkingReceived = true;
                 if (event.content) {
-                  thinkQueueRef.current.push(...event.content.split(''));
+                  thinkQueueRef.current += event.content;
                 }
                 break;
 
@@ -396,14 +404,14 @@ const Chatbot = () => {
                 if (event.token) {
                   // Always start drainer immediately on first token
                   if (!drainerRef.current) startDrainer(botId);
-                  charQueueRef.current.push(...event.token.split(''));
+                  charQueueRef.current += event.token;
                 }
                 break;
 
               // ── Error ────────────────────────────────────────────────────
               case 'error':
                 stopDrainer();
-                charQueueRef.current = [];
+                charQueueRef.current = '';
                 setMessages(prev => prev.map(m =>
                   m.id === botId
                     ? { ...m, text: event.message || 'An error occurred.', isError: true }
@@ -415,7 +423,7 @@ const Chatbot = () => {
               default:
                 if (event.token) {
                   if (!drainerRef.current) startDrainer(botId);
-                  charQueueRef.current.push(...event.token.split(''));
+                  charQueueRef.current += event.token;
                 }
                 break;
             }
@@ -428,15 +436,17 @@ const Chatbot = () => {
       // Stream done — flush any remaining chars instantly to prevent truncation
       stopDrainer();
       stopThinkDrainer();
-      const remainingChars = charQueueRef.current.splice(0);
-      const remainingThink = thinkQueueRef.current.splice(0);
+      const remainingChars = charQueueRef.current;
+      const remainingThink = thinkQueueRef.current;
+      charQueueRef.current = '';
+      thinkQueueRef.current = '';
       if (remainingChars.length > 0 || remainingThink.length > 0) {
         setMessages(prev => prev.map(m => {
           if (m.id !== botId) return m;
           return {
             ...m,
-            text: m.text + remainingChars.join(''),
-            thinking: (m.thinking || '') + remainingThink.join(''),
+            text: m.text + remainingChars,
+            thinking: (m.thinking || '') + remainingThink,
           };
         }));
       }
@@ -444,8 +454,8 @@ const Chatbot = () => {
     } catch (err) {
       stopDrainer();
       stopThinkDrainer();
-      charQueueRef.current = [];
-      thinkQueueRef.current = [];
+      charQueueRef.current = '';
+      thinkQueueRef.current = '';
       if (err.name !== 'AbortError') {
         setMessages(prev => prev.map(m =>
           m.id === botId
@@ -455,8 +465,8 @@ const Chatbot = () => {
       }
     } finally {
       // Drainers already stopped above — just clean up state
-      charQueueRef.current = [];
-      thinkQueueRef.current = [];
+      charQueueRef.current = '';
+      thinkQueueRef.current = '';
       setMessages(prev => prev.map(m =>
         m.id === botId ? { ...m, streaming: false, activeTools: [] } : m
       ));
@@ -469,8 +479,8 @@ const Chatbot = () => {
     if (abortRef.current) abortRef.current.abort();
     stopDrainer();
     stopThinkDrainer();
-    charQueueRef.current = [];
-    thinkQueueRef.current = [];
+    charQueueRef.current = '';
+    thinkQueueRef.current = '';
     setMessages(prev => prev.map(m =>
       m.streaming ? { ...m, streaming: false, activeTools: [] } : m
     ));
@@ -492,23 +502,31 @@ const Chatbot = () => {
       {/* ── Header ── */}
       <header className="chat-header">
         <div className="header-brand">
-          <div className="brand-logo"><GraduationCap size={20} /></div>
-          <div>
-            <div className="brand-name">UoS AI Assistant</div>
-            <div className="brand-sub">University of Swat · Powered by Dual-Model AI</div>
+          <div className="brand-logo">
+            {logoLoadFailed ? (
+              <GraduationCap size={20} />
+            ) : (
+              <img
+                src={BRAND_LOGO_SRC}
+                alt="UoS Logo"
+                className="brand-logo-img"
+                onError={() => setLogoLoadFailed(true)}
+              />
+            )}
           </div>
-        </div>
-        <div className="header-actions">
-          <button className="theme-btn" onClick={toggleTheme} title="Toggle theme">
-            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
+          <div>
+            <div className="brand-name">UoS AI Concierge</div>
+            <div className="brand-sub">University of Swat • Smart Student Helpdesk</div>
+          </div>
         </div>
       </header>
 
       {/* ── Messages ── */}
       {messages.length === 0 ? (
         <div className="welcome-state">
-          <div className="welcome-logo"><GraduationCap size={40} /></div>
+          <div className="welcome-logo">
+          <img src={BRAND_LOGO_SRC} alt="UoS Logo" className="brand-logo-img" />
+        </div>
           <h1 className="welcome-title">How can I help you?</h1>
           <p className="welcome-sub">Ask about admissions, programs, fees, location, or verify your documents.</p>
           <div className="suggestion-grid">

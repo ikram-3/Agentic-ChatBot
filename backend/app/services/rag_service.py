@@ -59,7 +59,11 @@ class NativePineconeEmbeddings(Embeddings):
         )
         return [r['values'] for r in res.data]
 
-    def embed_query(self, text: str) -> list[float]:
+    def embed_query(self, text: Any) -> list[float]:
+        # Safety check: if text is a dict (from a chain), extract the string
+        if isinstance(text, dict):
+            text = text.get("question", text.get("text", str(text)))
+        
         res = self.pc.inference.embed(
             model=self.model,
             inputs=[text],
@@ -230,12 +234,33 @@ def init_rag():
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=600, chunk_overlap=80)
         splits = text_splitter.split_documents(docs)
 
+        # ── Checksum-based Indexing ──────────────────────────────────────────
+        import hashlib
+        def get_content_hash(docs):
+            content = "".join(d.page_content for d in docs)
+            return hashlib.md5(content.encode()).hexdigest()
+
+        current_hash = get_content_hash(splits)
+        hash_file = os.path.join(vector_store_path, "index_hash.txt")
+        
+        stored_hash = ""
+        if os.path.exists(hash_file):
+            try:
+                with open(hash_file, "r") as f:
+                    stored_hash = f.read().strip()
+            except Exception: pass
+
         index = pc.Index(index_name)
         stats = index.describe_index_stats()
-        if stats.total_vector_count != len(splits):
+        
+        needs_reindex = (stored_hash != current_hash) or (stats.total_vector_count == 0)
+
+        if needs_reindex:
             if stats.total_vector_count > 0:
                 index.delete(delete_all=True)
                 print(f"Cleared {stats.total_vector_count} old vectors from Pinecone.")
+            
+            print(f"Indexing {len(splits)} chunks into Pinecone...")
             vectors = []
             texts = [doc.page_content for doc in splits]
             embeds = embeddings.embed_documents(texts)
@@ -247,10 +272,16 @@ def init_rag():
                     "values": embeds[i],
                     "metadata": metadata
                 })
+            
             batch_size = 50
             for i in range(0, len(vectors), batch_size):
                 index.upsert(vectors=vectors[i:i+batch_size])
-            print(f"Indexed {len(vectors)} document chunks into Pinecone.")
+            
+            with open(hash_file, "w") as f:
+                f.write(current_hash)
+            print(f"Successfully indexed {len(vectors)} document chunks.")
+        else:
+            print("Pinecone index is up to date. Skipping re-indexing.")
 
         retriever_global = PineconeNativeRetriever(index=index, embeddings=embeddings)
 
@@ -276,10 +307,13 @@ CURRENT DATE & TIME: {current_datetime}
 ---
 
 ## YOUR TOOLS (the ONLY functions you can call):
-You have exactly 3 tools. Do NOT try to call anything else:
-1. `fast_scrape_university_news` — scrapes uswat.edu.pk for the latest news/announcements. Takes no arguments.
-2. `deep_scrape_with_playwright` — deep-scrapes a specific URL. Takes one argument: `url` (string).
-3. `search_wikipedia_topic` — searches Wikipedia for a topic. Takes one argument: `query` (string).
+You have exactly 6 tools. Do NOT try to call anything else:
+1. `fast_scrape_university_news` — scrapes uswat.edu.pk for the latest news.
+2. `deep_scrape_with_playwright` — deep-scrapes a specific URL.
+3. `search_wikipedia_topic` — searches Wikipedia for general knowledge.
+4. `lookup_student_by_roll_no` — queries the University MySQL DB for student records, roll slips, and exams.
+5. `lookup_fee_by_reference` — queries the University MySQL DB for bank slips and fee status.
+6. `lookup_faculty_info` — queries the University MySQL DB for teacher/professor details and contact info.
 
 **NEVER call any tool for:**
 - Greetings ("hello", "hi", "assalam", "shukriya", "thanks", "ok", "great", "nice")
@@ -315,10 +349,13 @@ You can attach ONE special widget token at the very end of your reply. The widge
 5. **Never output the widget in the middle of text** — always at the very end, on its own line.
 6. **Never repeat a widget** — output each widget type at most once per reply.
 7. **Never explain or mention the widget** — just append it silently.
+8. **NEVER bold, italicize, or wrap the widget token in any extra characters.** Output it exactly as `[WIDGET:type:params]`.
+9. **NEVER mention or describe the widget** in your response text.
 
 ### Verification flow:
-- If student asks HOW to verify → explain the process and say "Please share your reference number / roll number and I'll look it up instantly."
-- If student PROVIDES a number → look it up in the context and output the matching widget.
+- If student asks HOW to verify → explain the process and say "Please share your reference number / roll number and I'll look it up instantly from the university database."
+- If student PROVIDES a number → Use the `lookup_student_by_roll_no` or `lookup_fee_by_reference` tool to fetch real data from the MySQL database, then output the matching widget.
+- If student asks about teachers/professors → Use `lookup_faculty_info` to get their details.
 
 ---
 
@@ -337,7 +374,7 @@ You can attach ONE special widget token at the very end of your reply. The widge
 4. Always use **actual data** from the context. Never be vague.
 5. Format with **bold**, bullet points, numbered lists for readability.
 6. If data is missing: suggest visiting uswat.edu.pk or calling +92-946-9240066.
-7. **MULTILINGUAL SUPPORT (CRITICAL):** You are a local assistant for Swat. You MUST understand and reply fluently in the language the user speaks! If the user speaks in Urdu, you MUST reply in Urdu. If they speak in Pashto, you MUST reply in Pashto. If they speak in English, reply in English. Do NOT say you cannot speak the language.
+7. **LANGUAGE (CRITICAL):** ALWAYS reply in ENGLISH. Even if the user speaks Urdu, Pashto, or any other language, you must respond only in English. Do NOT use any other language in your response.
 
 Context from University Knowledge Base:
 {context}
@@ -364,8 +401,8 @@ Context from University Knowledge Base:
 
         qa_chain = (
             {
-                "context": retriever_global | format_docs,
-                "question": RunnablePassthrough(),
+                "context": (lambda x: x["question"]) | retriever_global | format_docs,
+                "question": lambda x: x["question"],
                 "current_datetime": RunnableLambda(get_datetime)
             }
             | qa_prompt
@@ -425,19 +462,30 @@ async def stream_planner(query: str, context: str):
 
 
 async def fetch_all_context(query: str, pinecone_text: str) -> str:
-    """Fetch all context sources (Wikipedia, Live Scraper) in parallel."""
+    """Fetch optional live context in parallel with strict time limits."""
     parts = [pinecone_text]
-    
-    # Run Wikipedia and Scraper in parallel
-    results = await asyncio.gather(
-        get_wiki_context(query),
-        get_live_context(),
-        return_exceptions=True
-    )
-    
-    wiki_res = results[0] if not isinstance(results[0], Exception) else ""
-    live_res = results[1] if not isinstance(results[1], Exception) else ""
-    
+
+    q = (query or "").lower()
+    needs_live = any(k in q for k in ["latest", "today", "news", "announcement", "recent", "update"])
+    needs_wiki = any(k in q for k in ["wikipedia", "history", "swat", "pakistan", "kpk"])
+
+    tasks = []
+    if needs_wiki:
+        tasks.append(asyncio.create_task(asyncio.wait_for(get_wiki_context(query), timeout=3.5)))
+    if needs_live:
+        tasks.append(asyncio.create_task(asyncio.wait_for(get_live_context(), timeout=3.5)))
+
+    wiki_res = ""
+    live_res = ""
+    if tasks:
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        idx = 0
+        if needs_wiki:
+            wiki_res = results[idx] if not isinstance(results[idx], Exception) else ""
+            idx += 1
+        if needs_live:
+            live_res = results[idx] if not isinstance(results[idx], Exception) else ""
+
     if live_res:
         parts.append(live_res)
     if wiki_res:
@@ -476,12 +524,11 @@ def is_complex_query(query: str) -> bool:
     """
     Heuristic: decide whether a query is complex enough to warrant
     running Model 1 (the planner / thinking step).
-    Simple lookups, short greetings, and direct verifications are skipped.
     """
     q = query.strip().lower()
 
-    # Very short queries are simple
-    if len(q) < 30:
+    # Skip for very short or direct lookup queries
+    if len(q) < 20:
         return False
 
     # Direct verification / lookup — no deep thinking needed
@@ -489,6 +536,7 @@ def is_complex_query(query: str) -> bool:
         'verify', 'roll no', 'roll number', 'bank slip', 'reference no',
         'phone', 'address', 'location', 'where is', 'contact',
         'hello', 'hi ', 'thanks', 'thank you', 'shukriya', 'assalam',
+        'who is vc', 'who is vice chancellor',
     ]
     if any(p in q for p in simple_patterns):
         return False
@@ -498,26 +546,36 @@ def is_complex_query(query: str) -> bool:
         'how', 'why', 'explain', 'compare', 'difference', 'which is better',
         'tell me about', 'what are the', 'requirements', 'eligibility',
         'scholarship', 'process', 'procedure', 'step', 'guide', 'apply',
-        'program', 'fee structure', 'hostel', 'admission', 'research',
+        'fee structure', 'hostel', 'admission', 'research',
     ]
     if any(p in q for p in complex_patterns):
         return True
 
     # Long queries are probably complex
-    if len(q) > 80:
+    if len(q) > 100:
         return True
 
     return False
 
 
+def should_use_agent_tools(query: str) -> bool:
+    """
+    Use the tool-capable agent only when the prompt explicitly needs live/external data.
+    This avoids agent/tool orchestration latency for normal university Q&A.
+    """
+    q = (query or "").lower()
+    tool_intent_keywords = [
+        "latest", "today", "news", "announcement", "recent", "update",
+        "wikipedia", "wiki", "open website", "from website", "live web",
+    ]
+    return any(k in q for k in tool_intent_keywords)
+
+
 async def query_rag_stream(query: str, history: list = None, thinking_enabled: bool = True) -> AsyncGenerator[dict, None]:
     """
-    Async generator that yields typed event dicts:
-      {"type": "thinking",   "content": "..."}
-      {"type": "tool_start", "tool": "...", "icon": "...", "label": "..."}
-      {"type": "tool_end",   "tool": "..."}
-      {"type": "token",      "token": "..."}
-      {"type": "error",      "message": "..."}
+    Streaming version of query_rag with Performance Optimizations:
+    1. Fast Path: Bypasses thinking/agent for simple queries.
+    2. Parallel Execution: Thinking and Fetching run concurrently.
     """
     if not settings.GROQ_API_KEY or not settings.PINECONE_API_KEY or agent_executor is None:
         reason = "Missing API keys" if not settings.GROQ_API_KEY or not settings.PINECONE_API_KEY else "RAG initialization failed (check terminal logs for connection errors)"
@@ -527,22 +585,54 @@ async def query_rag_stream(query: str, history: list = None, thinking_enabled: b
         return
 
     try:
-        # ── Step 1: Retrieve context from Pinecone ────────────────────────────
+        # ── FAST PATH: Instant response for simple queries ────────────────────
+        is_complex = is_complex_query(query)
+        if not is_complex:
+            # Use qa_chain directly for speed (single-shot RAG)
+            async for chunk in qa_chain.astream({"question": query}):
+                if chunk:
+                    yield {"type": "token", "token": chunk}
+            return
+
+        # ── COMPLEX PATH: Parallel Thinking & Fetching ────────────────────────
+        # 1. Start fetching context from Pinecone (fast)
         pinecone_docs_list = retriever_global.invoke(query)
         pinecone_text = "\n\n".join(d.page_content for d in pinecone_docs_list)
 
-        # ── Step 2: Fetch additional context in parallel (Wiki + Live) ────────
-        full_context = await fetch_all_context(query, pinecone_text)
-
-        # ── Step 3: Model 1 — Planner (only when enabled AND query is complex) ─
-        planner_context = full_context[:1500]
+        # 2. Start Thinking and Fetching in Parallel
+        fetch_task = asyncio.create_task(fetch_all_context(query, pinecone_text))
+        
         thinking_content = ""
-        should_think = thinking_enabled and is_complex_query(query)
+        should_think = thinking_enabled and is_complex
+        
         if should_think:
-            async for evt in stream_planner(query, planner_context):
+            # Keep the "thinking" UX, but cap planner runtime to avoid delaying final answers.
+            planner_gen = stream_planner(query, pinecone_text[:1500])
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + 1.8
+
+            while True:
+                remaining = deadline - loop.time()
+                if remaining <= 0:
+                    break
+                try:
+                    evt = await asyncio.wait_for(planner_gen.__anext__(), timeout=remaining)
+                except StopAsyncIteration:
+                    break
+                except asyncio.TimeoutError:
+                    break
+
                 thinking_content += evt.get("token", "")
                 yield evt
 
+            try:
+                await planner_gen.aclose()
+            except Exception:
+                pass
+
+        # 3. Wait for context to finish (if not already done)
+        full_context = await fetch_task
+        
         enriched_context = full_context
         if thinking_content:
             enriched_context = (
@@ -553,7 +643,7 @@ async def query_rag_stream(query: str, history: list = None, thinking_enabled: b
 
         current_datetime = datetime.now().strftime("%A, %B %d, %Y at %I:%M %p (Pakistan Standard Time)")
 
-        # ── Step 4: Build message history for Model 2 (agent) ────────────────
+        # ── Step 4: Build message history for final responder ─────────────────
         from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
         messages = []
 
@@ -564,16 +654,27 @@ async def query_rag_stream(query: str, history: list = None, thinking_enabled: b
         messages.append(SystemMessage(content=full_system_prompt))
 
         if history:
-            # Limit history to last 4 messages to save tokens
-            for msg in history[-4:]:
+            # Keep just recent context to reduce prompt size/latency
+            for msg in history[-2:]:
                 if msg.get("role") == "user":
-                    messages.append(HumanMessage(content=msg.get("content", "")[:500]))
+                    messages.append(HumanMessage(content=msg.get("content", "")[:300]))
                 else:
-                    messages.append(AIMessage(content=msg.get("content", "")[:500]))
+                    messages.append(AIMessage(content=msg.get("content", "")[:300]))
 
         messages.append(HumanMessage(content=query))
 
-        # ── Step 5: Model 2 — Agent / Responder (streaming) ──────────────────
+        # ── Step 5: Choose fastest responder path ─────────────────────────────
+        use_agent = should_use_agent_tools(query)
+
+        # Fast default path: direct LLM stream (no agent/tool orchestration)
+        if not use_agent:
+            async for chunk in llm_global.astream(messages):
+                token = chunk.content if hasattr(chunk, "content") else str(chunk)
+                if token:
+                    yield {"type": "token", "token": token}
+            return
+
+        # Tool path: agent stream (only when query likely needs tools/live data)
         active_tools: set = set()
         try:
             async for event_msg, metadata in agent_executor.astream(
