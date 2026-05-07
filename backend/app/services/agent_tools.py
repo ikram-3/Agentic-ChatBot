@@ -78,10 +78,10 @@ async def lookup_student_by_roll_no(roll_no: str) -> str:
     if not student:
         return f"No student found with roll number '{roll_no}'."
     
-    res = f"Student Name: {student['name']}\nFather Name: {student['father_name']}\nProgram: {student['program']}\nSemester: {student['semester']}\nSection: {student['section']}\nStatus: {student['status']}"
+    res = f"Student Name: {student['name']}\nFather Name: {student['father_name']}\nProgram: {student['program']}\nSemester: {student['current_semester']}\nSection: {student['section']}\nStatus: {student['status']}"
     if student.get('exam_record'):
         exam = student['exam_record']
-        res += f"\n\n--- Exam Record ---\nType: {exam['exam_type']}\nSession: {exam['session']}\nCenter: {exam['center']}\nDates: {exam['start_date']} to {exam['end_date']}"
+        res += f"\n\n--- Exam Schedule ---\nType: {exam['exam_type']}\nDate: {exam['exam_date']}\nTime: {exam['start_time']}\nVenue: {exam['venue']}"
     if student.get('subjects'):
         res += f"\nSubjects: {', '.join(student['subjects'])}"
     return res
