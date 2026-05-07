@@ -11,12 +11,8 @@ MYSQL_USER = os.getenv("MYSQL_USER", "root")
 MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
 MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "uos_chatbot")
 
-# Global flag to track which DB we are using
-DB_TYPE = "mysql" 
-
 async def get_db_connection():
     """Returns a connection and the DB type (mysql/sqlite)."""
-    global DB_TYPE
     try:
         # Try MySQL first
         conn = await aiomysql.connect(
@@ -27,14 +23,12 @@ async def get_db_connection():
             db=MYSQL_DATABASE,
             autocommit=True
         )
-        DB_TYPE = "mysql"
         return conn, "mysql"
     except Exception:
         # Fallback to SQLite (perfect for Hugging Face)
         db_path = os.path.join(os.getcwd(), "uos_chatbot.db")
         conn = await aiosqlite.connect(db_path)
         conn.row_factory = aiosqlite.Row
-        DB_TYPE = "sqlite"
         return conn, "sqlite"
 
 async def init_db():
@@ -89,12 +83,14 @@ async def init_db():
 async def fetch_one(query, params):
     conn, db_type = await get_db_connection()
     try:
+        # Dynamically fix placeholder based on active DB
+        final_query = query.replace("?", "%s") if db_type == "mysql" else query
         if db_type == "mysql":
             async with conn.cursor(aiomysql.DictCursor) as cur:
-                await cur.execute(query, params)
+                await cur.execute(final_query, params)
                 return await cur.fetchone()
         else:
-            async with conn.execute(query, params) as cur:
+            async with conn.execute(final_query, params) as cur:
                 row = await cur.fetchone()
                 return dict(row) if row else None
     finally:
@@ -103,12 +99,13 @@ async def fetch_one(query, params):
 async def fetch_all(query, params=None):
     conn, db_type = await get_db_connection()
     try:
+        final_query = query.replace("?", "%s") if db_type == "mysql" else query
         if db_type == "mysql":
             async with conn.cursor(aiomysql.DictCursor) as cur:
-                await cur.execute(query, params or ())
+                await cur.execute(final_query, params or ())
                 return await cur.fetchall()
         else:
-            async with conn.execute(query, params or ()) as cur:
+            async with conn.execute(final_query, params or ()) as cur:
                 rows = await cur.fetchall()
                 return [dict(r) for r in rows]
     finally:
@@ -122,11 +119,10 @@ async def get_student_info(roll_no):
         LEFT JOIN programs p ON s.program_id = p.program_id
         WHERE s.roll_no = ?
     """
-    student = await fetch_one(q.replace("?", "%s" if DB_TYPE == "mysql" else "?"), (roll_no,))
+    student = await fetch_one(q, (roll_no,))
     
     if student:
-        exam_q = "SELECT * FROM exam_schedules WHERE roll_no = ?"
-        exam = await fetch_one(exam_q.replace("?", "%s" if DB_TYPE == "mysql" else "?"), (roll_no,))
+        exam = await fetch_one("SELECT * FROM exam_schedules WHERE roll_no = ?", (roll_no,))
         student['exam_record'] = exam
         student['subjects'] = []
     return student
@@ -140,7 +136,7 @@ async def get_fee_info(ref_no):
         LEFT JOIN programs p ON s.program_id = p.program_id
         WHERE f.ref_no = ?
     """
-    return await fetch_one(q.replace("?", "%s" if DB_TYPE == "mysql" else "?"), (ref_no,))
+    return await fetch_one(q, (ref_no,))
 
 async def get_faculty_info(department=None):
     query = """
@@ -150,12 +146,10 @@ async def get_faculty_info(department=None):
     """
     if department:
         query += " WHERE d.dept_name LIKE ?"
-        return await fetch_all(query.replace("?", "%s" if DB_TYPE == "mysql" else "?"), (f"%{department}%",))
+        return await fetch_all(query, (f"%{department}%",))
     return await fetch_all(query)
 
 async def get_db_pool():
-    # This is only used for the connectivity check in rag_service.py
-    # We return a dummy object that supports 'acquire' as an async context manager
     class DummyPool:
         async def __aenter__(self): return self
         async def __aexit__(self, *args): pass
