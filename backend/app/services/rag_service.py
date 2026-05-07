@@ -557,8 +557,14 @@ def is_complex_query(query: str) -> bool:
         'tell me about', 'what are the', 'requirements', 'eligibility',
         'scholarship', 'process', 'procedure', 'step', 'guide', 'apply',
         'fee structure', 'hostel', 'admission', 'research',
+        'verify', 'check', 'lookup', 'status', 'slip', 'roll', 'teacher', 'faculty',
     ]
     if any(p in q for p in complex_patterns):
+        return True
+
+    # Check for ID patterns (Roll numbers, Reference numbers)
+    import re
+    if re.search(r'(UOS|CS|SE|BBA|PHR|ENG)-\d{4}', q, re.I):
         return True
 
     # Long queries are probably complex
@@ -577,8 +583,9 @@ def should_use_agent_tools(query: str) -> bool:
     tool_intent_keywords = [
         "latest", "today", "news", "announcement", "recent", "update",
         "wikipedia", "wiki", "open website", "from website", "live web",
+        "verify", "slip", "roll", "check", "lookup", "teacher", "faculty", "professor",
     ]
-    return any(k in q for k in tool_intent_keywords)
+    return any(k in q for k in tool_intent_keywords) or re.search(r'(UOS|CS|SE|BBA|PHR|ENG)-\d{4}', q, re.I)
 
 
 async def query_rag_stream(query: str, history: list = None, thinking_enabled: bool = True) -> AsyncGenerator[dict, None]:
