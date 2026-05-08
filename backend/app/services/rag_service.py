@@ -470,9 +470,11 @@ The frontend renders it as a rich interactive component automatically.
 8. Never mention or describe the widget token in the reply text.
 9. Never wrap the token in bold, italics, or extra characters.
 
-### Verification flow:
-- User asks HOW to verify → explain and ask for the number.
-- User GIVES a number → call the appropriate DB tool, then append the matching widget.
+### Strict Verification & Data Integrity:
+1. **Never** hallucinate student names, dates, or amounts.
+2. If a database tool (`lookup_student_by_roll_no` or `lookup_fee_by_reference`) returns "No record found", you MUST inform the user that the record is not in the system. **Never** guess or assume details.
+3. If the user provides a number like `UOS-XXXX`, you **MUST** call the tool before answering. Do not rely on your general knowledge.
+4. If you have any doubt about a piece of data, state that it could not be verified in the live database.
 
 ---
 ## SCOPE & TONE
@@ -735,25 +737,25 @@ _TOOL_KEYWORDS = frozenset([
     "verify", "slip", "roll", "check", "lookup", "teacher", "faculty", "professor",
 ])
 
-_ID_PATTERN = re.compile(r"(UOS|CS|SE|BBA|PHR|ENG)-\d{4}", re.IGNORECASE)
+_ID_PATTERN = re.compile(r"([A-Z]{2,4})(-\d+){2,3}", re.IGNORECASE)
 
 
 def _is_complex_query(query: str) -> bool:
     q = query.strip().lower()
-    if len(q) < 20:
+    if len(q) < 5: # Even shorter for direct ID pasting
         return False
+    if _ID_PATTERN.search(q):
+        return True
     if any(p in q for p in _SIMPLE_PATTERNS):
         return False
     if any(p in q for p in _COMPLEX_PATTERNS):
         return True
-    if _ID_PATTERN.search(q):
-        return True
-    return len(q) > 100
+    return len(q) > 80
 
 
 def _should_use_agent(query: str) -> bool:
     q = query.lower()
-    return any(k in q for k in _TOOL_KEYWORDS) or bool(_ID_PATTERN.search(q))
+    return any(k in q for k in _TOOL_KEYWORDS) or bool(_ID_PATTERN.search(q)) or "reference" in q or "roll" in q or "bank slip" in q
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -877,9 +879,12 @@ async def query_rag_stream(
 
         thinking_content = ""
         if thinking_enabled:
-            # Increase deadline to 3.5s for more reliable streaming
+            # Yield an initial indicator so the UI reacts immediately
+            yield {"type": "thinking_token", "token": "🔍 Analysing request & university data...\n\n"}
+            
+            # Increase deadline to 6s for more reliable streaming on Hugging Face
             loop     = asyncio.get_running_loop()
-            deadline = loop.time() + 3.5 
+            deadline = loop.time() + 6.0 
             planner  = _stream_planner(query, pinecone_text[:1500])
             while True:
                 remaining = deadline - loop.time()
