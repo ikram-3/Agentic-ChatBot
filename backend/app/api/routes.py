@@ -51,3 +51,19 @@ async def chat_stream_endpoint(request: ChatRequest):
             "X-Accel-Buffering": "no",
         },
     )
+
+@router.get("/verify/bank-slip/{ref_no}")
+async def verify_bank_slip(ref_no: str):
+    from app.services.db_service import get_fee_info
+    data = await get_fee_info(ref_no)
+    if not data:
+        raise HTTPException(status_code=404, detail="Fee record not found")
+    return data
+
+@router.get("/verify/roll-slip/{roll_no}")
+async def verify_roll_slip(roll_no: str):
+    from app.services.db_service import get_student_info
+    data = await get_student_info(roll_no)
+    if not data:
+        raise HTTPException(status_code=404, detail="Student record not found")
+    return data

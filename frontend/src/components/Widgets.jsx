@@ -253,26 +253,33 @@ const STATUS_MAP = {
   'Rejected': { cls:'sr', icon:<XCircle size={14}/>,      label:'Rejected' },
 };
 
-/* ── Bank Slip Widget ── */
+/* ── Bank Slip Widget (Live) ── */
 export const BankSlipWidget = ({ refNo }) => {
-  const slips = {
-    'UOS-2026-001234': { student_name:'Muhammad Ikram', program:'BS Computer Science',     amount:45000, bank:'HBL',          branch:'Mingora', payment_date:'2026-08-10', status:'Verified', challan_no:'CHN-2026-78432', fee_type:'Semester Fee' },
-    'UOS-2026-001235': { student_name:'Sara Khan',      program:'BS Software Engineering', amount:45000, bank:'NBP',          branch:'Swat',    payment_date:'2026-08-12', status:'Verified', challan_no:'CHN-2026-78433', fee_type:'Semester Fee' },
-    'UOS-2026-001236': { student_name:'Ali Hassan',     program:'BBA',                     amount:45000, bank:'UBL',          branch:'Kanju',   payment_date:'2026-08-15', status:'Pending',  challan_no:'CHN-2026-78434', fee_type:'Semester Fee' },
-    'UOS-2026-001237': { student_name:'Fatima Noor',    program:'Pharm-D',                 amount:60000, bank:'HBL',          branch:'Mingora', payment_date:'2026-08-11', status:'Verified', challan_no:'CHN-2026-78435', fee_type:'Semester Fee' },
-    'UOS-2026-ADM-0021':{ student_name:'Zubair Ahmed',  program:'MS Computer Science',     amount:1000,  bank:'Bank Al Habib',branch:'Swat',    payment_date:'2026-08-05', status:'Verified', challan_no:'CHN-2026-78436', fee_type:'Application Fee'},
-  };
-  const d = slips[refNo?.toUpperCase()];
-  const st = d ? (STATUS_MAP[d.status] || STATUS_MAP['Pending']) : null;
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  if (!d) return (
+  useEffect(() => {
+    if (!refNo) return;
+    setLoading(true);
+    fetch(`/api/verify/bank-slip/${refNo}`)
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => { setError(true); setLoading(false); });
+  }, [refNo]);
+
+  if (loading) return <div className="w-card w-verify w-loading"><Sparkles className="w-spin" size={17}/> Validating reference...</div>;
+
+  if (error || !data) return (
     <div className="w-card w-verify w-not-found">
       <div className="w-header"><div className="w-header-icon" style={{background:'rgba(239,68,68,0.15)',color:'#ef4444'}}><CreditCard size={17}/></div>
         <div><div className="w-title">Bank Slip — Not Found</div><div className="w-subtitle">Reference: {refNo}</div></div>
       </div>
-      <div className="w-not-found-body">No record found. Contact Finance Office: <strong>+92-946-9240066</strong></div>
+      <div className="w-not-found-body">No live record found. Please verify the number or contact Finance: <strong>+92-946-9240066</strong></div>
     </div>
   );
+
+  const st = STATUS_MAP[data.status] || STATUS_MAP['Pending'];
 
   return (
     <div className="w-card w-verify">
@@ -280,15 +287,18 @@ export const BankSlipWidget = ({ refNo }) => {
         <div className="w-verify-icon-wrap"><CreditCard size={22}/></div>
         <div className="w-verify-hero-info">
           <div className="w-verify-ref">{refNo}</div>
-          <div className="w-verify-type">{d.fee_type}</div>
+          <div className="w-verify-type">{data.fee_type || 'University Fee'}</div>
         </div>
         <div className={`w-status-badge ${st.cls}`}>{st.icon} {st.label}</div>
       </div>
       <div className="w-verify-grid">
         {[
-          ['Student', d.student_name],['Program', d.program],
-          ['Challan No.', d.challan_no],['Amount', `Rs. ${d.amount.toLocaleString()}`],
-          ['Bank', `${d.bank} — ${d.branch}`],['Date', d.payment_date],
+          ['Student', data.student_name],
+          ['Program', data.program || 'UoS Program'],
+          ['Challan No.', data.challan_no],
+          ['Amount', `Rs. ${(data.amount || 0).toLocaleString()}`],
+          ['Bank', `${data.bank || 'HBL'} — ${data.branch || 'Main'}`],
+          ['Date', data.payment_date || 'N/A'],
         ].map(([label, val], i) => (
           <div key={i} className="w-verify-cell">
             <div className="w-cell-label">{label}</div>
@@ -300,21 +310,29 @@ export const BankSlipWidget = ({ refNo }) => {
   );
 };
 
-/* ── Roll Slip Widget ── */
+/* ── Roll Slip Widget (Live) ── */
 export const RollSlipWidget = ({ rollNo }) => {
-  const slips = {
-    'CS-2026-F-001':  { student_name:'Muhammad Ikram', father_name:'Sher Muhammad', program:'BS Computer Science',     semester:'1st', section:'A', exam_type:'Mid-Term', exam_session:'Fall 2026', exam_start_date:'2026-11-05', exam_end_date:'2026-11-15', exam_center:'Main Examination Hall, UoS', subjects:['Introduction to Programming (CSC-101)','Calculus (MTH-101)','English Composition (ENG-101)','Islamic Studies (ISL-101)','Digital Logic Design (CSC-102)'], status:'Active' },
-    'SE-2026-F-015':  { student_name:'Sara Khan',       father_name:'Imran Khan',    program:'BS Software Engineering', semester:'2nd', section:'B', exam_type:'Final',    exam_session:'Fall 2026', exam_start_date:'2026-12-10', exam_end_date:'2026-12-25', exam_center:'Block-A Hall, UoS',           subjects:['OOP (SE-201)','Discrete Mathematics (MTH-201)','Pakistan Studies (PAK-101)','Technical Writing (ENG-201)','Data Structures (SE-202)'], status:'Active' },
-    'PHR-2026-F-022': { student_name:'Fatima Noor',     father_name:'Noor Muhammad', program:'Pharm-D',                 semester:'4th', section:'A', exam_type:'Final',    exam_session:'Fall 2026', exam_start_date:'2026-12-12', exam_end_date:'2026-12-28', exam_center:'Pharmacy Block Hall, UoS',    subjects:['Pharmacology-II (PHR-401)','Pharmaceutical Chemistry (PHR-402)','Pharmacognosy (PHR-403)','Biochemistry (PHR-404)'], status:'Active' },
-  };
-  const d = slips[rollNo?.toUpperCase()];
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  if (!d) return (
+  useEffect(() => {
+    if (!rollNo) return;
+    setLoading(true);
+    fetch(`/api/verify/roll-slip/${rollNo}`)
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => { setError(true); setLoading(false); });
+  }, [rollNo]);
+
+  if (loading) return <div className="w-card w-verify w-loading"><Sparkles className="w-spin" size={17}/> Locating record...</div>;
+
+  if (error || !data) return (
     <div className="w-card w-verify w-not-found">
       <div className="w-header"><div className="w-header-icon" style={{background:'rgba(239,68,68,0.15)',color:'#ef4444'}}><FileText size={17}/></div>
         <div><div className="w-title">Roll Slip — Not Found</div><div className="w-subtitle">Roll No: {rollNo}</div></div>
       </div>
-      <div className="w-not-found-body">No record found. Contact Examination Office: <strong>+92-946-9240066</strong></div>
+      <div className="w-not-found-body">No record found in the 2026 database. Contact Examination Office: <strong>+92-946-9240066</strong></div>
     </div>
   );
 
@@ -322,15 +340,17 @@ export const RollSlipWidget = ({ rollNo }) => {
     <div className="w-card w-verify w-roll">
       <div className="w-roll-hero">
         <div className="w-roll-no">{rollNo}</div>
-        <div className="w-roll-meta">{d.exam_type} · {d.exam_session}</div>
-        <div className="w-status-badge sv"><CheckCircle2 size={14}/> Active</div>
+        <div className="w-roll-meta">{data.exam_record?.exam_type || 'Regular'} · {data.exam_record?.semester || data.current_semester} Semester</div>
+        <div className="w-status-badge sv"><CheckCircle2 size={14}/> {data.status}</div>
       </div>
       <div className="w-verify-grid">
         {[
-          ['Student', d.student_name],['Father', d.father_name],
-          ['Program', d.program],[`Sem / Sec`, `${d.semester} / ${d.section}`],
-          ['Exam Dates', `${d.exam_start_date} → ${d.exam_end_date}`],
-          ['Center', d.exam_center],
+          ['Student', data.name],
+          ['Father', data.father_name],
+          ['Program', data.program],
+          [`Sem / Sec`, `${data.current_semester} / ${data.section}`],
+          ['Department', data.department],
+          ['Center', data.exam_record?.venue || 'UoS Examination Center'],
         ].map(([label, val], i) => (
           <div key={i} className="w-verify-cell">
             <div className="w-cell-label">{label}</div>
@@ -338,16 +358,18 @@ export const RollSlipWidget = ({ rollNo }) => {
           </div>
         ))}
       </div>
-      <div className="w-subjects">
-        <div className="w-subjects-title">Subjects</div>
-        <div className="w-subjects-list">
-          {d.subjects.map((s, i) => (
-            <div key={i} className="w-subject-item" style={{animationDelay:`${i*60}ms`}}>
-              <CheckCircle2 size={11} className="w-subj-icon"/> {s}
-            </div>
-          ))}
+      {data.subjects?.length > 0 && (
+        <div className="w-subjects">
+          <div className="w-subjects-title">Enrolled Subjects</div>
+          <div className="w-subjects-list">
+            {data.subjects.map((s, i) => (
+              <div key={i} className="w-subject-item" style={{animationDelay:`${i*60}ms`}}>
+                <CheckCircle2 size={11} className="w-subj-icon"/> {s}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
