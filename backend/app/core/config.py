@@ -14,7 +14,8 @@ class Settings(BaseSettings):
     MYSQL_DATABASE: str = "uos_chatbot"
     
     class Config:
-        env_file = ".env"
+        import os
+        env_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
         extra = "ignore"
 
 settings = Settings()
