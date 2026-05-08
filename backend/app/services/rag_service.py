@@ -292,58 +292,6 @@ def _load_docx_files() -> List[Document]:
     return docs
 
 
-def _load_verification_data() -> List[Document]:
-    """Load bank slips and roll number slips from verification_data.json."""
-    ver_path = os.path.join(_DATA_PATH, "verification_data.json")
-    docs: List[Document] = []
-    try:
-        with open(ver_path) as fh:
-            ver_data = json.load(fh)
-
-        for slip in ver_data.get("bank_slips", []):
-            docs.append(Document(
-                page_content=(
-                    f"Bank Slip Verification Record\n"
-                    f"Reference No: {slip['reference_no']}\n"
-                    f"Challan No: {slip['challan_no']}\n"
-                    f"Student Name: {slip['student_name']}\n"
-                    f"Program: {slip['program']}\n"
-                    f"Semester: {slip['semester']}\n"
-                    f"Fee Type: {slip['fee_type']}\n"
-                    f"Amount: Rs. {slip['amount']:,}\n"
-                    f"Bank: {slip['bank']}\n"
-                    f"Branch: {slip['branch']}\n"
-                    f"Payment Date: {slip['payment_date']}\n"
-                    f"Status: {slip['status']}"
-                ),
-                metadata={"source": "bank_slip", "ref": slip["reference_no"]},
-            ))
-
-        for slip in ver_data.get("roll_number_slips", []):
-            docs.append(Document(
-                page_content=(
-                    f"Roll Number Slip Verification Record\n"
-                    f"Roll No: {slip['roll_no']}\n"
-                    f"Student Name: {slip['student_name']}\n"
-                    f"Father's Name: {slip['father_name']}\n"
-                    f"Program: {slip['program']}\n"
-                    f"Department: {slip['department']}\n"
-                    f"Semester: {slip['semester']}\n"
-                    f"Section: {slip['section']}\n"
-                    f"Exam Type: {slip['exam_type']}\n"
-                    f"Exam Session: {slip['exam_session']}\n"
-                    f"Exam Start: {slip['exam_start_date']}\n"
-                    f"Exam End: {slip['exam_end_date']}\n"
-                    f"Exam Center: {slip['exam_center']}\n"
-                    f"Subjects: {', '.join(slip.get('subjects', []))}\n"
-                    f"Issued: {slip['issued_date']}\n"
-                    f"Status: {slip['status']}"
-                ),
-                metadata={"source": "roll_slip", "roll_no": slip["roll_no"]},
-            ))
-    except Exception as exc:
-        print(f"  ⚠️  Could not load verification data: {exc}")
-    return docs
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -622,7 +570,7 @@ async def init_rag() -> None:
         embeddings = NativePineconeEmbeddings(pc_client=pc)
 
         # ── Load knowledge ────────────────────────────────────────────────────
-        raw_docs = _load_docx_files() + _load_verification_data()
+        raw_docs = _load_docx_files()
 
         splitter = RecursiveCharacterTextSplitter(chunk_size=600, chunk_overlap=80)
         splits   = splitter.split_documents(raw_docs)
