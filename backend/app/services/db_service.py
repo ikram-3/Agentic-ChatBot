@@ -80,6 +80,17 @@ async def init_db():
     
     print(f"✅ Database ({db_type}) initialized successfully.")
 
+def _clean_row(row):
+    """Convert Decimal and Date objects to JSON-serializable formats."""
+    if not row: return None
+    from decimal import Decimal
+    from datetime import date, time
+    d = dict(row)
+    for k, v in d.items():
+        if isinstance(v, Decimal): d[k] = float(v)
+        elif isinstance(v, (date, time)): d[k] = str(v)
+    return d
+
 async def fetch_one(query, params):
     conn, db_type = await get_db_connection()
     try:
@@ -88,11 +99,12 @@ async def fetch_one(query, params):
         if db_type == "mysql":
             async with conn.cursor(aiomysql.DictCursor) as cur:
                 await cur.execute(final_query, params)
-                return await cur.fetchone()
+                row = await cur.fetchone()
+                return _clean_row(row)
         else:
             async with conn.execute(final_query, params) as cur:
                 row = await cur.fetchone()
-                return dict(row) if row else None
+                return _clean_row(row)
     finally:
         if db_type == "mysql":
             conn.close()
@@ -106,11 +118,12 @@ async def fetch_all(query, params=None):
         if db_type == "mysql":
             async with conn.cursor(aiomysql.DictCursor) as cur:
                 await cur.execute(final_query, params or ())
-                return await cur.fetchall()
+                rows = await cur.fetchall()
+                return [_clean_row(r) for r in rows]
         else:
             async with conn.execute(final_query, params or ()) as cur:
                 rows = await cur.fetchall()
-                return [dict(r) for r in rows]
+                return [_clean_row(r) for r in rows]
     finally:
         if db_type == "mysql":
             conn.close()
