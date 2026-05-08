@@ -135,13 +135,13 @@ STATIC_WIDGET_DEFS: List[WidgetDefinition] = [
 ]
 
 TOOL_DISPLAY: Dict[str, Dict[str, str]] = {
-    "fast_scrape_university_news":  {"label": "Checking University Website",  "icon": "🌐"},
-    "deep_scrape_with_playwright":  {"label": "Deep-Reading Web Page",        "icon": "🕸️"},
-    "search_wikipedia_topic":       {"label": "Searching Wikipedia",          "icon": "📖"},
-    "WikipediaQueryRun":            {"label": "Searching Wikipedia",          "icon": "📖"},
-    "lookup_student_by_roll_no":    {"label": "Looking Up Student Record",    "icon": "🎓"},
-    "lookup_fee_by_reference":      {"label": "Verifying Fee Slip",           "icon": "🧾"},
-    "lookup_faculty_info":          {"label": "Fetching Faculty Info",        "icon": "👤"},
+    "fast_scrape_university_news":  {"label": "Checking latest news...",     "icon": "🌐"},
+    "deep_scrape_with_playwright":  {"label": "Scraping university site...", "icon": "🔍"},
+    "search_wikipedia_topic":       {"label": "Searching on Wikipedia...",   "icon": "📖"},
+    "WikipediaQueryRun":            {"label": "Searching on Wikipedia...",   "icon": "📖"},
+    "lookup_student_by_roll_no":    {"label": "Verifying student record...", "icon": "🎓"},
+    "lookup_fee_by_reference":      {"label": "Verifying fee slip...",        "icon": "🧾"},
+    "lookup_faculty_info":          {"label": "Searching faculty info...",   "icon": "👤"},
 }
 
 
