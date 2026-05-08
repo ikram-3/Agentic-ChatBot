@@ -552,15 +552,20 @@ async def init_rag() -> None:
         print("🚀 Initialising UoS RAG pipeline…")
 
         # ── Database Connectivity Check ──────────────────────────────────────
-        from app.services.db_service import get_db_pool
+        from app.services.db_service import get_db_connection
         try:
-            pool = await get_db_pool()
-            async with pool.acquire() as conn:
+            conn, db_type = await get_db_connection()
+            if db_type == "mysql":
                 async with conn.cursor() as cur:
                     await cur.execute("SELECT 1")
-            print("  ✅ MySQL Database connected.")
+                conn.close()
+            else:
+                async with conn.execute("SELECT 1"):
+                    pass
+                await conn.close()
+            print(f"  ✅ {db_type.title()} Database connected.")
         except Exception as db_exc:
-            print(f"  ⚠️  MySQL Connection failed: {db_exc}")
+            print(f"  ⚠️  Database Connection failed: {db_exc}")
             print("     (Verification and faculty lookups will be disabled)")
 
         # ── Pinecone ──────────────────────────────────────────────────────────

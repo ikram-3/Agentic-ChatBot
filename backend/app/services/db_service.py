@@ -94,7 +94,10 @@ async def fetch_one(query, params):
                 row = await cur.fetchone()
                 return dict(row) if row else None
     finally:
-        await conn.close()
+        if db_type == "mysql":
+            conn.close()
+        else:
+            await conn.close()
 
 async def fetch_all(query, params=None):
     conn, db_type = await get_db_connection()
@@ -109,7 +112,10 @@ async def fetch_all(query, params=None):
                 rows = await cur.fetchall()
                 return [dict(r) for r in rows]
     finally:
-        await conn.close()
+        if db_type == "mysql":
+            conn.close()
+        else:
+            await conn.close()
 
 async def get_student_info(roll_no):
     q = """
@@ -150,21 +156,9 @@ async def get_faculty_info(department=None):
     return await fetch_all(query)
 
 async def get_db_pool():
-    class DummyPool:
-        async def __aenter__(self): return self
-        async def __aexit__(self, *args): pass
-        def acquire(self):
-            class DummyConn:
-                async def __aenter__(self): return self
-                async def __aexit__(self, *args): pass
-                def cursor(self):
-                    class DummyCur:
-                        async def __aenter__(self): return self
-                        async def __aexit__(self, *args): pass
-                        async def execute(self, q): pass
-                    return DummyCur()
-            return DummyConn()
-    return DummyPool()
+    """Compatibility helper for connection testing."""
+    conn, db_type = await get_db_connection()
+    return conn, db_type
 
 if __name__ == "__main__":
     asyncio.run(init_db())
