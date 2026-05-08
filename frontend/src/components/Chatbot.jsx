@@ -183,8 +183,11 @@ const BotMessage = ({ msg }) => {
   return (
     <div className={`bot-bubble ${msg.isError ? 'error' : ''}`}>
       {/* Thinking Panel */}
-      {hasThinking && (
-        <ThinkingPanel content={msg.thinking} isStreaming={msg.streaming && !msg.text} />
+      {(msg.thinking || (msg.streaming && msg.thinkingEnabled)) && (
+        <ThinkingPanel 
+          content={msg.thinking} 
+          isStreaming={msg.streaming && !msg.text} 
+        />
       )}
 
       {/* Tool Orchestration Bar */}
@@ -308,6 +311,7 @@ const Chatbot = () => {
         id: botId,
         text: '',
         thinking: '',
+        thinkingEnabled: thinkingEnabled, // Track if we expect thinking
         activeTools: [],
         isBot: true,
         streaming: true,
@@ -360,6 +364,7 @@ const Chatbot = () => {
               case 'thinking_token':
                 thinkingReceived = true;
                 if (event.token) {
+                  if (!thinkDrainerRef.current) startThinkDrainer(botId);
                   thinkQueueRef.current += event.token;
                 }
                 break;

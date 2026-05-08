@@ -68,7 +68,6 @@ llm_global: Optional[ChatGroq] = None
 planner_llm: Optional[ChatGroq] = None
 QA_CHAIN_PROMPT: Optional[str] = None
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Widget System
 # ─────────────────────────────────────────────────────────────────────────────
@@ -863,8 +862,8 @@ async def query_rag_stream(
     try:
         is_complex = _is_complex_query(query)
 
-        # ── Fast path ─────────────────────────────────────────────────────────
-        if not is_complex:
+        # ── Fast path (only if thinking is OFF and query is simple) ───────────
+        if not is_complex and not thinking_enabled:
             async for chunk in qa_chain.astream({"question": query}):
                 if chunk:
                     yield {"type": "token", "token": chunk}
@@ -878,8 +877,9 @@ async def query_rag_stream(
 
         thinking_content = ""
         if thinking_enabled:
+            # Increase deadline to 3.5s for more reliable streaming
             loop     = asyncio.get_running_loop()
-            deadline = loop.time() + 1.8
+            deadline = loop.time() + 3.5 
             planner  = _stream_planner(query, pinecone_text[:1500])
             while True:
                 remaining = deadline - loop.time()
@@ -1044,4 +1044,4 @@ def _unavailable_message() -> str:
 # Bootstrap
 # ─────────────────────────────────────────────────────────────────────────────
 
-# init_rag()
+# init_rag()
