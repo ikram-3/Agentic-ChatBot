@@ -1,21 +1,9 @@
 """
-rag_service.py — UoS AI Assistant (Advanced, Optimised)
-
 Architecture:
   Model 1 (Planner)    — llama-3.1-8b-instant @ temp=0.1  → intent + gap analysis
   Model 2 (Responder)  — llama-3.1-8b-instant @ temp=0.7  → final answer + widget selection
   Vector Store         — Pinecone (multilingual-e5-large embeddings)
-  Widget Resolution    — Dynamic: widgets populated from vector DB / docx at runtime
 
-Performance improvements applied:
-  - LRU cache for repeated Pinecone vector lookups
-  - Pinecone retrieval + context fetch run in parallel
-  - Dynamic system prompt sizing (slim prompt for simple queries)
-  - Planner only fires when agent path is actually needed
-  - Async embedding to avoid blocking the event loop
-  - Per-request timeout guard to prevent worker starvation
-  - Fixed create_agent → create_tool_calling_agent + AgentExecutor
-  - Context capped at MAX_CONTEXT_CHARS to control token spend
 """
 
 from __future__ import annotations
@@ -71,9 +59,6 @@ _DATA_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 # Maximum characters fed into the LLM context window per request
 MAX_CONTEXT_CHARS = 3_000
 
-# Populated once at init; used by dynamic widget resolver
-_WIDGET_REGISTRY: Dict[str, "WidgetDefinition"] = {}
-
 # LangChain / Groq globals
 qa_chain = None
 agent_executor = None
@@ -81,10 +66,6 @@ retriever_global: Optional["PineconeNativeRetriever"] = None
 llm_global: Optional[ChatGroq] = None
 planner_llm: Optional[ChatGroq] = None
 QA_CHAIN_PROMPT: Optional[str] = None
-
-
-# Populated once at init
-_WIDGET_REGISTRY: Dict[str, Any] = {}
 
 TOOL_DISPLAY: Dict[str, Dict[str, str]] = {
     "fast_scrape_university_news":  {"label": "Checking latest news...",     "icon": "🌐"},
@@ -99,10 +80,6 @@ TOOL_DISPLAY: Dict[str, Dict[str, str]] = {
 
 def get_tool_display(name: str) -> Dict[str, str]:
     return TOOL_DISPLAY.get(name, {"label": name.replace("_", " ").title(), "icon": "⚙️"})
-
-
-def build_widget_catalogue() -> str:
-    return ""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -281,16 +258,6 @@ def _load_docx_files() -> List[Document]:
     return docs
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Dynamic Widget Data Extraction
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _extract_widget_data_from_docs(docs: List[Document]) -> None:
-    """
-    Previously used to extract data for various widgets. 
-    Currently disabled as only the static 'map' widget is used.
-    """
-    pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -363,7 +330,6 @@ Output format (strict markdown):
 **🔍 Gaps / Needs Live Data:**
 - <gap or "None — context sufficient">
 
-**🌐 Widget Suggestion:** <widget token or "None">
 
 **✅ Answer Plan**: <Briefly describe the final output structure. DO NOT mention tool names or internal steps here.>
 
@@ -448,7 +414,7 @@ def _upsert_vectors(
 
 async def init_rag() -> None:
     global qa_chain, agent_executor, retriever_global
-    global llm_global, planner_llm, QA_CHAIN_PROMPT, _WIDGET_REGISTRY
+    global llm_global, planner_llm, QA_CHAIN_PROMPT
 
     missing = [k for k in ("GROQ_API_KEY", "PINECONE_API_KEY") if not getattr(settings, k, None)]
     if missing:
@@ -542,7 +508,6 @@ async def init_rag() -> None:
                 "context":          (lambda x: x["question"]) | retriever_global | _format_docs,
                 "question":         lambda x: x["question"],
                 "current_datetime": RunnableLambda(_now),
-                "widget_catalogue": lambda _: build_widget_catalogue(),
             }
             | qa_prompt
             | llm_global
@@ -727,7 +692,6 @@ async def query_rag(query: str) -> str:
         system_prompt = QA_CHAIN_PROMPT.format(
             context=full_context,
             current_datetime=datetime.now().strftime("%A, %B %d, %Y at %I:%M %p"),
-            widget_catalogue=build_widget_catalogue(),
         )
         response = await llm_global.ainvoke([
             SystemMessage(content=system_prompt),
@@ -875,8 +839,6 @@ async def _query_rag_stream_inner(
         current_datetime=datetime.now().strftime(
             "%A, %B %d, %Y at %I:%M %p (Pakistan Standard Time)"
         ),
-        # _SIMPLE_SYSTEM_PROMPT doesn't have {widget_catalogue} — guard it
-        **({"widget_catalogue": build_widget_catalogue()} if is_complex else {}),
     )
 
     messages = [SystemMessage(content=system_prompt)]
@@ -910,10 +872,9 @@ async def _query_rag_stream_inner(
     # AgentExecutor expects {input: ..., chat_history: [...]}
     agent_input = {
         "input": query,
-        "chat_history": messages[:-1],  # everything except the last HumanMessage
+        "chat_history": messages[:-1],
         "context": enriched_context,
         "current_datetime": datetime.now().strftime("%A, %B %d, %Y at %I:%M %p (Pakistan Standard Time)"),
-        "widget_catalogue": build_widget_catalogue(),
     }
 
     try:
