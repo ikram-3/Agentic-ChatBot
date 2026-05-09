@@ -8,7 +8,7 @@ import time
 import httpx
 
 _cache: dict = {}
-CACHE_TTL = 7200  # 2 hours
+CACHE_TTL = 7200  
 
 WIKI_SUMMARY_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/{title}"
 WIKI_SEARCH_URL  = "https://en.wikipedia.org/w/api.php"

@@ -9,7 +9,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 _cache = {"data": None, "ts": 0}
-CACHE_TTL = 1800  # 30 minutes
+CACHE_TTL = 1800 
 BASE_URL = "https://www.uswat.edu.pk"
 
 async def _get(url: str, timeout: int = 4) -> BeautifulSoup | None:
@@ -33,10 +33,9 @@ async def scrape_uos() -> dict:
 
     soup = await _get(BASE_URL)
     if soup:
-        # Targeted selection for main news/announcements
-        items = soup.select(".news-ticker a, .latest-news li, .announcement-item, article.post")
+        items = soup.select(".news-ticker a, .latest-news li, .announcement-item, article.post, .elementor-post, .news-card, .notices-list li")
         if not items:
-            items = soup.select("article, .news-item, .announcement")
+            items = soup.select("article, .news-item, .announcement, .wp-block-post")
             
         for tag in items:
             title_el = tag.find(["h2", "h3", "h4", "a"])

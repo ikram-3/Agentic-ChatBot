@@ -32,9 +32,10 @@ async def deep_scrape_with_playwright(url: str) -> str:
     the fast_scrape tool didn't have enough detail.
     It launches a headless browser to render JavaScript.
     Do NOT use this for general knowledge.
+
     """
     if not url.startswith("http"):
-        url = "https://www.uswat.edu.pk/" + url.lstrip("/")
+        url = "https://www.uswat.edu.pk/" + url.lstrip("")
         
     try:
         async with async_playwright() as p:
