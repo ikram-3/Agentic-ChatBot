@@ -827,10 +827,10 @@ async def query_rag_stream(
             # Yield an initial indicator so the UI reacts immediately
             yield {"type": "thinking_token", "token": "🔍 Analysing request & university data...\n\n"}
             
-            # Increase deadline to 6s for more reliable streaming on Hugging Face
+            # Increase deadline to 10s for more reliable streaming
             loop     = asyncio.get_running_loop()
-            deadline = loop.time() + 6.0 
-            planner  = _stream_planner(query, pinecone_text[:1500])
+            deadline = loop.time() + 10.0 
+            planner  = _stream_planner(query, pinecone_text[:2000])
             while True:
                 remaining = deadline - loop.time()
                 if remaining <= 0:
