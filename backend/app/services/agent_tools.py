@@ -77,14 +77,20 @@ async def lookup_student_by_roll_no(roll_no: str) -> str:
     from app.services.db_service import get_student_info
     student = await get_student_info(roll_no)
     if not student:
-        return f"No student found with roll number '{roll_no}'."
+        return f"DATABASE RESULT: No student found with roll number '{roll_no}'. This is the FINAL answer — do NOT guess."
     
-    res = f"Student Name: {student['name']}\nFather Name: {student['father_name']}\nProgram: {student['program']}\nSemester: {student['current_semester']}\nSection: {student['section']}\nStatus: {student['status']}"
+    res = f"""DATABASE RESULT — USE THESE EXACT VALUES IN YOUR RESPONSE:
+- Student Name: {student['name']}
+- Father Name: {student['father_name']}
+- Program: {student['program']}
+- Semester: {student['current_semester']}
+- Section: {student['section']}
+- Status: {student['status']}"""
     if student.get('exam_record'):
         exam = student['exam_record']
-        res += f"\n\n--- Exam Schedule ---\nType: {exam['exam_type']}\nDate: {exam['exam_date']}\nTime: {exam['start_time']}\nVenue: {exam['venue']}"
-    if student.get('subjects'):
-        res += f"\nSubjects: {', '.join(student['subjects'])}"
+        res += f"""\n- Exam Type: {exam['exam_type']}
+- Exam Date: {exam['exam_date']}
+- Venue: {exam['venue']}"""
     return res
 
 @tool
@@ -96,9 +102,18 @@ async def lookup_fee_by_reference(ref_no: str) -> str:
     from app.services.db_service import get_fee_info
     fee = await get_fee_info(ref_no)
     if not fee:
-        return f"No fee record found for reference '{ref_no}'."
+        return f"DATABASE RESULT: No fee record found for reference '{ref_no}'. This is the FINAL answer — do NOT guess."
     
-    return f"Student: {fee['student_name']}\nProgram: {fee['program']}\nAmount: Rs. {fee['amount']}\nBank: {fee['bank']}\nBranch: {fee['branch']}\nDate: {fee['payment_date']}\nStatus: {fee['status']}\nChallan No: {fee['challan_no']}\nType: {fee['fee_type']}"
+    return f"""DATABASE RESULT — USE THESE EXACT VALUES IN YOUR RESPONSE:
+- Student Name: {fee['student_name']}
+- Program: {fee['program']}
+- Amount Paid: Rs. {fee['amount']}
+- Bank: {fee['bank']}
+- Branch: {fee['branch']}
+- Payment Date: {fee['payment_date']}
+- Status: {fee['status']}
+- Challan No: {fee['challan_no']}
+- Fee Type: {fee['fee_type']}"""
 
 @tool
 async def lookup_faculty_info(department: str = "") -> str:

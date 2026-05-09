@@ -323,11 +323,12 @@ You have exactly 6 tools — call them ONLY when necessary:
 
 ---
 ## DATA INTEGRITY & VERIFICATION RULES
-1. **Ask First**: If the user says "verify bank slip", "check roll slip", or similar — but does **NOT** provide an actual reference number or roll number — you **MUST** ask for it politely. Example: *"Please provide your reference number (e.g. UOS-2026-001234) so I can verify it."* **Never assume or use a number the user did not give you.**
-2. **Never Hallucinate**: Never guess student names, dates, amounts, or any database fields. Only report what the tool returns.
-3. **No Record Found**: If a tool returns no result, clearly state: *"No record was found for that reference number. Please double-check and try again."*
-4. **Summarise Accurately**: When a tool returns data, summarise the key details (Name, Program, Status, Amount) clearly and concisely.
-5. **Tool Dependency**: If the user provides a roll number (e.g. `CS-2026-F-001`) or reference number (e.g. `UOS-2026-003453`), you **MUST** call the appropriate tool before responding.
+1. **Ask First**: If the user says "verify bank slip", "check roll slip", or similar — but does **NOT** provide an actual reference number or roll number — you **MUST** ask for it politely. **Never assume or use a number the user did not give you.**
+2. **ABSOLUTE RULE — ZERO HALLUCINATION**: When a tool returns data labelled "DATABASE RESULT", you **MUST** copy the exact names, amounts, dates, and values from the tool output into your response. You are **FORBIDDEN** from substituting, rephrasing, or inventing any student name, father name, amount, or date that differs from the tool output. If the tool says "Muhammad Ikram", you say "Muhammad Ikram" — NOT "Muhammad Ali Khan" or any other name.
+3. **No Record Found**: If a tool returns "No record found", tell the user immediately. Do NOT try other tools (scraping or Wikipedia) for database ID lookups. Stop immediately.
+4. **Summarise with EXACT values**: Present tool results clearly using the **exact values** returned. Never paraphrase names or amounts.
+5. **Tool Dependency**: If the user provides a roll number or reference number, you **MUST** call the tool before responding. Never answer from memory.
+6. **Never Expose Internals**: Do NOT show "Retrieved from: lookup_student_by_roll_no" or any tool names in your response.
 
 ---
 ## CONTEXT FROM KNOWLEDGE BASE
@@ -573,7 +574,7 @@ async def init_rag() -> None:
             tools=tools,
             verbose=False,
             handle_parsing_errors=True,
-            max_iterations=5,
+            max_iterations=3,
         )
 
         print("[OK] UoS RAG pipeline ready.\n")
@@ -718,7 +719,7 @@ async def query_rag(query: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Hard ceiling on how long a single streaming request may run (seconds)
-_REQUEST_TIMEOUT_SECONDS = 45
+_REQUEST_TIMEOUT_SECONDS = 90
 
 
 async def query_rag_stream(
@@ -778,27 +779,34 @@ async def _query_rag_stream_inner(
         return
 
     # ── Parallel: Pinecone retrieval + external context fetch ─────────────────
-    # Both kick off at the same time instead of sequentially.
+    # Skip expensive external fetches for simple DB lookup queries
+    _DB_HINT_PATTERNS = frozenset(["verify", "check", "slip", "roll", "fee", "student", "reference", "challan"])
+    _is_db_query = any(p in query.lower() for p in _DB_HINT_PATTERNS) or bool(re.search(r"[A-Z]{2,4}-\d{4}", query, re.IGNORECASE))
+
     pinecone_task = asyncio.create_task(
         retriever_global._aget_relevant_documents(
             query, top_k=3 if not is_complex else 6
         )
     )
 
-    # _fetch_all_context needs pinecone_text, but external fetches (wiki/live)
-    # can start immediately — we merge once both finish.
-    external_task = asyncio.create_task(_fetch_all_context(query, ""))
-
-    pinecone_docs, external_context = await asyncio.gather(
-        pinecone_task, external_task, return_exceptions=True
-    )
-
-    if isinstance(pinecone_docs, Exception):
-        print(f"[WARN] Pinecone retrieval error: {pinecone_docs}")
-        pinecone_docs = []
-    if isinstance(external_context, Exception):
-        print(f"[WARN] External context error: {external_context}")
+    if _is_db_query:
+        # DB queries don't need Wikipedia or live scraping — skip entirely
+        pinecone_docs = await pinecone_task
+        if isinstance(pinecone_docs, Exception):
+            print(f"[WARN] Pinecone retrieval error: {pinecone_docs}")
+            pinecone_docs = []
         external_context = ""
+    else:
+        external_task = asyncio.create_task(_fetch_all_context(query, ""))
+        pinecone_docs, external_context = await asyncio.gather(
+            pinecone_task, external_task, return_exceptions=True
+        )
+        if isinstance(pinecone_docs, Exception):
+            print(f"[WARN] Pinecone retrieval error: {pinecone_docs}")
+            pinecone_docs = []
+        if isinstance(external_context, Exception):
+            print(f"[WARN] External context error: {external_context}")
+            external_context = ""
 
     pinecone_text = "\n\n".join(d.page_content for d in pinecone_docs)
     full_context  = (pinecone_text + "\n\n" + external_context).strip()

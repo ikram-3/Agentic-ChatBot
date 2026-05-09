@@ -95,12 +95,20 @@ async def init_db():
             async with conn.cursor() as cur:
                 for stmt in schema:
                     await cur.execute(stmt)
+                
+                # Also seed MySQL if empty
+                await cur.execute("SELECT COUNT(*) FROM students")
+                row = await cur.fetchone()
+                count = row[0] if row else 0
+                if count == 0:
+                    print("  [SEED] Seeding MySQL with professional demo data...")
+                    # We need a cursor-based seeder or just run the same queries
+                    await _seed_demo_data_mysql(cur)
         else:
             for stmt in schema:
                 await conn.execute(stmt)
             await conn.commit()
 
-        if db_type == "sqlite":
             async with conn.execute("SELECT COUNT(*) FROM students") as cur:
                 row  = await cur.fetchone()
                 count = row[0] if row else 0
@@ -116,6 +124,42 @@ async def init_db():
 
     print(f"[OK] Database ({db_type}) initialized successfully.")
 
+
+async def _seed_demo_data_mysql(cur):
+    """Insert rich demo data into MySQL."""
+    # Reuse the same data but with MySQL syntax
+    from decimal import Decimal
+    
+    # ── Departments
+    depts = [
+        (1, "Computer Science & IT", "Block A", "Dr. Arif Hussain"),
+        (2, "Business Administration", "Block B", "Prof. Khalid"),
+        (3, "Pharmacy", "Block C", "Dr. Saima")
+    ]
+    await cur.executemany("INSERT IGNORE INTO departments (dept_id, dept_name, building, head_of_dept) VALUES (%s,%s,%s,%s)", depts)
+
+    # ── Programs
+    progs = [
+        (1, 1, "BS Computer Science", 4, 8, 360000.00),
+        (2, 1, "MCS", 2, 4, 200000.00),
+        (3, 3, "BBA", 4, 8, 320000.00)
+    ]
+    await cur.executemany("INSERT IGNORE INTO programs (program_id, dept_id, program_name, duration_years, total_semesters, total_fee_estimate) VALUES (%s,%s,%s,%s,%s,%s)", progs)
+
+    # ── Students
+    studs = [
+        ("CS-2026-F-001", 1, 1, "Muhammad Ikram", "Sher Muhammad", 1, "A", "Active"),
+        ("CS-2026-F-002", 1, 1, "Ali Hassan", "Hassan Khan", 1, "A", "Active")
+    ]
+    await cur.executemany("INSERT IGNORE INTO students (roll_no, dept_id, program_id, name, father_name, current_semester, section, status) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)", studs)
+
+    # ── Fee Slips
+    fees = [
+        ("UOS-2026-001234", "CS-2026-F-001", 45000, 45000, "2026-08-10", "HBL", "Mingora", "Verified", "Semester Fee", "CHN-78432")
+    ]
+    await cur.executemany("INSERT IGNORE INTO fee_slips (ref_no, roll_no, amount_due, amount_paid, payment_date, bank_name, branch_name, status, fee_type, challan_no) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", fees)
+    
+    print("  [SEED] ✓ MySQL Demo data inserted.")
 
 async def _seed_demo_data(conn):
     """Insert rich, realistic demo data covering the full university structure."""

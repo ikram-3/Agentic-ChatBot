@@ -31,7 +31,12 @@ app.include_router(router, prefix="/api")
 
 @app.on_event("startup")
 async def startup_event():
+    from app.services.db_service import init_db
     from app.services.rag_service import init_rag
+    
+    # Initialize and seed database first
+    await init_db()
+    # Then initialize RAG pipeline
     await init_rag()
 
 # Serve Frontend
