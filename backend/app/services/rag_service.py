@@ -743,10 +743,13 @@ async def query_rag_stream(
         return
 
     # ── Per-request timeout guard — prevents worker starvation ───────────────
+    start_time = asyncio.get_event_loop().time()
     try:
-        async with asyncio.timeout(_REQUEST_TIMEOUT_SECONDS):
-            async for event in _query_rag_stream_inner(query, history, thinking_enabled):
-                yield event
+        async for event in _query_rag_stream_inner(query, history, thinking_enabled):
+            # Check for total request timeout
+            if (asyncio.get_event_loop().time() - start_time) > _REQUEST_TIMEOUT_SECONDS:
+                raise asyncio.TimeoutError()
+            yield event
     except asyncio.TimeoutError:
         yield {
             "type": "error",
