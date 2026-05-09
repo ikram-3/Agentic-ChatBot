@@ -623,16 +623,23 @@ _TOOL_KEYWORDS = frozenset([
     "latest", "today", "news", "announcement", "recent", "update",
     "wikipedia", "wiki", "open website", "from website", "live web",
     "verify", "slip", "roll", "check", "lookup", "teacher", "faculty", "professor",
+    # Student detail triggers
+    "student", "detail", "record", "my name", "show me", "who is",
+    "semester", "section", "program", "enrolled",
 ])
 
-_ID_PATTERN = re.compile(r"([A-Z]{2,4})(-\d+){2,3}", re.IGNORECASE)
+# Matches UoS-style IDs: CS-2026-F-001, UOS-2026-001234, UOS-2026-ADM-099
+_ID_PATTERN = re.compile(
+    r"[A-Z]{2,4}-\d{4}(-[A-Z0-9]+){1,3}",
+    re.IGNORECASE
+)
 
 
 def _is_complex_query(query: str) -> bool:
     q = query.strip().lower()
     if len(q) < 5:
         return False
-    if _ID_PATTERN.search(q):
+    if _ID_PATTERN.search(query):  # use original case for ID matching
         return True
     if any(p in q for p in _SIMPLE_PATTERNS):
         return False
@@ -645,7 +652,7 @@ def _should_use_agent(query: str) -> bool:
     q = query.lower()
     return (
         any(k in q for k in _TOOL_KEYWORDS)
-        or bool(_ID_PATTERN.search(q))
+        or bool(_ID_PATTERN.search(query))  # use original case
         or "reference" in q
         or "roll" in q
         or "bank slip" in q
