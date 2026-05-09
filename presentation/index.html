@@ -5,6 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UoS Agentic Chatbot - Comprehensive Project Presentation</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            themeVariables: {
+                primaryColor: '#006837',
+                edgeColor: '#c6a34f',
+                nodeBorder: '#c6a34f',
+                mainBkg: '#1e293b'
+            }
+        });
+    </script>
     <style>
         :root {
             --uos-green: #006837;
@@ -130,7 +143,7 @@
                 <div class="badge">Academic Final Project</div>
                 <h1>University of Swat<br><span>Agentic Chatbot</span></h1>
                 <p>An Advanced RAG-based AI Assistant for Campus-wide Information & Verification.</p>
-                <div style="color: var(--uos-gold); font-weight: 600; font-size: 1.5rem;">Developed by: Ikram</div>
+                <div style="color: var(--uos-gold); font-weight: 600; font-size: 1.5rem;">Developed by:  Muhammad Ikram and Muhammad Atiq</div>
                 <div class="links-container">
                     <a href="https://github.com/ikram-3/Agentic-ChatBot" class="btn btn-github">GitHub Repository</a>
                     <a href="https://huggingface.co/spaces/Ikramai/Agentic-ChatBot" class="btn btn-hf">Live on Hugging Face</a>
@@ -185,24 +198,34 @@
         <!-- Slide 4: Methodology -->
         <section>
             <div class="slide-content">
-                <h2>Methodology</h2>
-                <p>Our approach utilizes a "Reason-then-Act" (ReAct) loop powered by modern AI orchestration.</p>
-                <div class="grid">
-                    <div class="card" style="grid-column: span 1;">
-                        <h3>Tools & Materials</h3>
-                        <ul>
-                            <li><strong>Vector DB</strong>: Pinecone (Native Integration)</li>
-                            <li><strong>Relational DB</strong>: MySQL (Student Records)</li>
-                            <li><strong>AI Core</strong>: Groq (Llama 3.1)</li>
-                            <li><strong>Live Scrapers</strong>: Playwright & Scrapy</li>
-                        </ul>
-                    </div>
-                    <div class="img-container">
-                        <img src="uos_ai_architecture_1778298688681.png" alt="System Architecture">
-                    </div>
+                <h2>Technical Architecture</h2>
+                <div class="mermaid" style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 12px; margin-top: 1rem;">
+                    graph TD
+                        User((User/Student)) --> Frontend[React Glassmorphism UI]
+                        Frontend --> Backend[FastAPI Agentic Orchestrator]
+                        
+                        subgraph "Intelligence Layer"
+                            Backend --> LLM[Groq Llama 3 / Mixtral]
+                            LLM --> Planner[Query Planner]
+                        end
+                        
+                        subgraph "Knowledge & Data"
+                            Planner --> VectorDB[(Pinecone Vector Store)]
+                            Planner --> MySQL[(Relational DB: MySQL/SQLite)]
+                            Planner --> Web[Live Scraper / Wikipedia]
+                        end
+                        
+                        VectorDB --> Context[Context Retrieval]
+                        MySQL --> VerifiedData[Student/Fee Verification]
+                        Web --> FreshNews[Live UoS Updates]
+                        
+                        Context & VerifiedData & FreshNews --> FinalResponse[Verified Agentic Response]
+                        FinalResponse --> User
                 </div>
             </div>
         </section>
+
+        <!-- Slide 5: Methodology Details -->
 
         <!-- Slide 5: Results & Performance -->
         <section>
