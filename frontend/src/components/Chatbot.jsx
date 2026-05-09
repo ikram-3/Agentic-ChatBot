@@ -190,12 +190,15 @@ const BotMessage = ({ msg }) => {
         />
       )}
 
-      {/* Tool Orchestration Bar */}
-      {hasTools && <ToolStatusBar tools={msg.activeTools} />}
-
-      {/* Typing dots — only before any content arrives */}
-      {showTypingDots && (
-        <div className="typing-dots"><span /><span /><span /></div>
+      {/* Status (Thinking, Tools, or Typing dots) */}
+      {msg.streaming && !msg.text && (
+        <div className="bot-status-container">
+          {hasTools ? (
+            <ToolStatusBar tools={msg.activeTools} />
+          ) : (
+            <div className="typing-dots"><span /><span /><span /></div>
+          )}
+        </div>
       )}
 
       {/* Answer text */}

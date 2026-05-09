@@ -392,11 +392,17 @@
 }
 
 /* ── Tool Orchestration Status Bar ── */
+.bot-status-container {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  margin-bottom: 0.5rem;
+}
+
 .tool-status-bar {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
-  margin-bottom: 0.75rem;
 }
 
 .tool-chip {
