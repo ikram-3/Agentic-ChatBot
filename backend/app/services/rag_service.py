@@ -15,13 +15,12 @@ import json
 import os
 import re
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from functools import lru_cache
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from langchain_classic.agents import AgentExecutor, create_tool_calling_agent
-from langchain_community.vectorstores import Pinecone as PineconeLangchain
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -31,7 +30,7 @@ from langchain_core.retrievers import BaseRetriever
 from langchain_core.runnables import RunnableLambda
 from langchain_groq import ChatGroq
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from pinecone import Pinecone, ServerlessSpec
+from pinecone import Pinecone, ServerlessSpec 
 from pydantic import Field
 
 from app.core.config import settings
@@ -66,15 +65,16 @@ retriever_global: Optional["PineconeNativeRetriever"] = None
 llm_global: Optional[ChatGroq] = None
 planner_llm: Optional[ChatGroq] = None
 QA_CHAIN_PROMPT: Optional[str] = None
+_db_available: bool = True
 
 TOOL_DISPLAY: Dict[str, Dict[str, str]] = {
-    "fast_scrape_university_news":  {"label": "Checking latest news...",     "icon": "🌐"},
-    "deep_scrape_with_playwright":  {"label": "Scraping university site...", "icon": "🔍"},
-    "search_wikipedia_topic":       {"label": "Searching on Wikipedia...",   "icon": "📖"},
-    "WikipediaQueryRun":            {"label": "Searching on Wikipedia...",   "icon": "📖"},
-    "lookup_student_by_roll_no":    {"label": "Verifying your student record...", "icon": "🎓"},
-    "lookup_fee_by_reference":      {"label": "Verifying your fee slip...",        "icon": "🧾"},
-    "lookup_faculty_info":          {"label": "Searching for faculty details...",   "icon": "👤"},
+    "fast_scrape_university_news":  {"label": "Checking latest news...",     "icon": ""},
+    "deep_scrape_with_playwright":  {"label": "Scraping university site...", "icon": ""},
+    "search_wikipedia_topic":       {"label": "Searching on Wikipedia...",   "icon": ""},
+    "WikipediaQueryRun":            {"label": "Searching on Wikipedia...",   "icon": ""},
+    "lookup_student_by_roll_no":    {"label": "Verifying your student record...", "icon": ""},
+    "lookup_fee_by_reference":      {"label": "Verifying your fee slip...",        "icon": ""},
+    "lookup_faculty_info":          {"label": "Searching for faculty details...",   "icon": ""},
 }
 
 
@@ -421,6 +421,8 @@ async def init_rag() -> None:
         print(f"[WARN] Missing API keys: {', '.join(missing)}. Running in mock mode.")
         return
 
+    global _db_available
+
     try:
         print("[START] Initialising UoS RAG pipeline...")
 
@@ -436,8 +438,10 @@ async def init_rag() -> None:
                 async with conn.execute("SELECT 1"):
                     pass
                 await conn.close()
+            _db_available = True
             print(f"  [OK] {db_type.title()} Database connected.")
         except Exception as db_exc:
+            _db_available = False
             print(f"  [WARN] Database Connection failed: {db_exc}")
             print("     (Verification and faculty lookups will be disabled)")
 
@@ -699,7 +703,10 @@ async def query_rag(query: str) -> str:
         ])
         return response.content if hasattr(response, "content") else str(response)
     except Exception as exc:
-        return f"Error processing query: {exc}"
+        err = str(exc)
+        if "max iterations" in err.lower() or "agent stopped due to max iterations" in err.lower():
+            return err
+        return f"Error processing query: {err}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -781,6 +788,17 @@ async def _query_rag_stream_inner(
     )
 
     if _is_db_query:
+        if not _is_db_available():
+            yield {
+                "type": "error",
+                "message": (
+                    "⚠️ Database access is currently unavailable. "
+                    "Verification and student lookup requests cannot be completed right now. "
+                    "Please try again later."
+                ),
+            }
+            return
+
         # DB queries don't need Wikipedia or live scraping — skip entirely
         pinecone_docs = await pinecone_task
         if isinstance(pinecone_docs, Exception):
@@ -904,10 +922,24 @@ async def _query_rag_stream_inner(
                         yield {"type": "tool_end", "tool": name}
 
             # 3. Handle Final Output (Only yield content from AIMessages to avoid tool output duplication)
-            if "output" in chunk and isinstance(chunk["output"], str):
-                clean = _TAG_RE.sub("", chunk["output"])
-                if clean:
-                    yield {"type": "token", "token": clean}
+            if "output" in chunk:
+                output_val = chunk["output"]
+                if output_val is not None:
+                    if isinstance(output_val, str):
+                        clean = _TAG_RE.sub("", output_val)
+                    else:
+                        clean = _TAG_RE.sub("", str(output_val))
+                    if clean:
+                        # If the agent returned a stop-condition message, surface it as an error
+                        lc = clean.lower()
+                        if (
+                            "agent stopped due to max" in lc
+                            or "stopping agent prematurely" in lc
+                            or "stop condition" in lc
+                        ):
+                            yield {"type": "error", "message": clean}
+                        else:
+                            yield {"type": "token", "token": clean}
             elif "messages" in chunk:
                 for msg in chunk["messages"]:
                     # Only yield if it's an AI message with actual text content
@@ -944,6 +976,8 @@ async def _query_rag_stream_inner(
                         else "I encountered an issue. Please rephrase your question."
                     ),
                 }
+        elif "max iterations" in err.lower() or "agent stopped due to max iterations" in err.lower():
+            yield {"type": "error", "message": err}
         else:
             yield {"type": "error", "message": f"Agent error: {err}"}
 
@@ -960,6 +994,10 @@ def _is_ready() -> bool:
     )
 
 
+def _is_db_available() -> bool:
+    return _db_available
+
+
 def _unavailable_message() -> str:
     reason = (
         "Missing API keys"
@@ -972,9 +1010,3 @@ def _unavailable_message() -> str:
         "Please verify your .env file and internet connection."
     )
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Bootstrap
-# ─────────────────────────────────────────────────────────────────────────────
-
-# init_rag()

@@ -523,7 +523,7 @@ const Chatbot = () => {
             )}
           </div>
           <div>
-            <div className="brand-name">UoS AI Concierge</div>
+            <div className="brand-name">UoS AI</div>
             <div className="brand-sub">University of Swat • Smart Student Helpdesk</div>
           </div>
         </div>

@@ -10,6 +10,14 @@ if sys.platform == 'win32':
     else:
         print("[System] Windows ProactorEventLoopPolicy already active.")
 
+    # Extra safety: check current loop implementation if already created.
+    try:
+        loop = asyncio.get_event_loop()
+        if not isinstance(loop, asyncio.WindowsProactorEventLoopPolicy().new_event_loop().__class__):
+            print("[System] Current event loop may not support subprocesses. Deep scraping may be disabled.")
+    except Exception:
+        pass
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles

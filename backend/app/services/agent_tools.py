@@ -3,12 +3,20 @@ Agent Tools for UoS Assistant.
 These tools are exposed to the LangChain Agent to fetch real-time information.
 """
 
+import asyncio
+import sys
 from langchain_core.tools import tool
 from playwright.async_api import async_playwright
 from langchain_community.tools import WikipediaQueryRun
 from langchain_community.utilities import WikipediaAPIWrapper
 from langchain_classic.chains import LLMMathChain
 from langchain_core.tools import Tool
+
+
+def _is_windows_proactor() -> bool:
+    if sys.platform != 'win32':
+        return True
+    return isinstance(asyncio.get_event_loop_policy(), asyncio.WindowsProactorEventLoopPolicy)
 
 
 
@@ -36,6 +44,13 @@ async def deep_scrape_with_playwright(url: str) -> str:
     """
     if not url.startswith("http"):
         url = "https://www.uswat.edu.pk/" + url.lstrip("")
+
+    if not _is_windows_proactor():
+        return (
+            "Deep scraping is unavailable in this Windows environment because the async subprocess "
+            "support needed by Playwright is not enabled. Please try again on a compatible system or "
+            "use the website directly."
+        )
         
     try:
         async with async_playwright() as p:
@@ -52,6 +67,12 @@ async def deep_scrape_with_playwright(url: str) -> str:
             
             # Truncate to avoid context window explosion
             return content[:3000] + "\n...(truncated)"
+    except NotImplementedError:
+        return (
+            "Deep scraping is unavailable on this Windows system because subprocess support "
+            "is not available in the current event loop. Please run the backend with a Proactor event "
+            "loop or use a supported platform."
+        )
     except Exception as e:
         return f"Failed to deep scrape {url}. Error: {str(e)}"
 
@@ -75,7 +96,13 @@ async def lookup_student_by_roll_no(roll_no: str) -> str:
     You MUST provide an actual roll number (e.g. CS-2026-F-001).
     """
     from app.services.db_service import get_student_info
-    student = await get_student_info(roll_no)
+    try:
+        student = await get_student_info(roll_no)
+    except Exception:
+        return (
+            "DATABASE RESULT: Database connection is currently unavailable. "
+            "Please try again later. This is the FINAL answer — do NOT guess."
+        )
     if not student:
         return f"DATABASE RESULT: No student found with roll number '{roll_no}'. This is the FINAL answer — do NOT guess."
     
@@ -100,7 +127,13 @@ async def lookup_fee_by_reference(ref_no: str) -> str:
     You MUST provide an actual reference number (e.g. UOS-2026-001234).
     """
     from app.services.db_service import get_fee_info
-    fee = await get_fee_info(ref_no)
+    try:
+        fee = await get_fee_info(ref_no)
+    except Exception:
+        return (
+            "DATABASE RESULT: Database connection is currently unavailable. "
+            "Please try again later. This is the FINAL answer — do NOT guess."
+        )
     if not fee:
         return f"DATABASE RESULT: No fee record found for reference '{ref_no}'. This is the FINAL answer — do NOT guess."
     
